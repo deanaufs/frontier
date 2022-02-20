@@ -23,12 +23,13 @@
 
 use std::{sync::Arc, time::Duration};
 
-use futures::prelude::*;
+use futures::{prelude::*, channel::mpsc};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, DigestFor, HashFor, NumberFor},
 };
 use sp_state_machine::StorageProof;
+use codec::{Encode, Decode};
 
 pub mod block_validation;
 pub mod error;
@@ -234,32 +235,35 @@ pub trait Proposer<B: BlockT> {
 ///
 /// Generally, consensus authoring work isn't undertaken while well behind
 /// the head of the chain.
-pub trait SyncOracle {
+pub trait SyncOracle<B: BlockT> {
 	/// Whether the synchronization service is undergoing major sync.
 	/// Returns true if so.
 	fn is_major_syncing(&mut self) -> bool;
 	/// Whether the synchronization service is offline.
 	/// Returns true if so.
 	fn is_offline(&mut self) -> bool;
+
+	fn ve_request(&mut self, _: VoteElectionRequest<B>);
 }
 
 /// A synchronization oracle for when there is no network.
 #[derive(Clone, Copy, Debug)]
 pub struct NoNetwork;
 
-impl SyncOracle for NoNetwork {
+impl<B: BlockT> SyncOracle<B> for NoNetwork {
 	fn is_major_syncing(&mut self) -> bool {
 		false
 	}
 	fn is_offline(&mut self) -> bool {
 		false
 	}
+	fn ve_request(&mut self, _: VoteElectionRequest<B>){}
 }
 
-impl<T> SyncOracle for Arc<T>
+impl<B: BlockT, T> SyncOracle<B> for Arc<T>
 where
 	T: ?Sized,
-	for<'r> &'r T: SyncOracle,
+	for<'r> &'r T: SyncOracle<B>,
 {
 	fn is_major_syncing(&mut self) -> bool {
 		<&T>::is_major_syncing(&mut &**self)
@@ -267,6 +271,10 @@ where
 
 	fn is_offline(&mut self) -> bool {
 		<&T>::is_offline(&mut &**self)
+	}
+
+	fn ve_request(&mut self, request: VoteElectionRequest<B>){
+		<&T>::ve_request(&mut &**self, request)
 	}
 }
 
@@ -336,3 +344,52 @@ pub trait SlotData {
 	/// The static slot key
 	const SLOT_KEY: &'static [u8];
 }
+
+#[derive(Debug)]
+pub enum VoteElectionRequest<B: BlockT>{
+	BuildVoteStream(mpsc::UnboundedSender<VoteData<B>>),
+	BuildElectionStream(mpsc::UnboundedSender<ElectionData<B>>),
+
+	PropagateVote(VoteData<B>),
+	PropagateElection(ElectionData<B>),
+}
+
+#[derive(Debug, Encode, Decode, Clone)]
+pub struct VoteData<B>
+where 
+	B: BlockT,
+{
+	pub block_hash: B::Hash,
+	pub vrf_output_bytes: Vec<u8>,
+	pub vrf_proof_bytes: Vec<u8>,
+	pub pub_bytes: Vec<u8>,
+}
+
+impl<B: BlockT> PartialEq for VoteData<B>{
+    fn eq(&self, other: &Self) -> bool {
+		(self.block_hash == other.block_hash) &&
+		(self.vrf_output_bytes == other.vrf_output_bytes) &&
+		(self.vrf_proof_bytes == other.vrf_proof_bytes) &&
+		(self.pub_bytes == other.pub_bytes )
+    }
+}
+impl<B: BlockT> Eq for VoteData<B>{}
+
+#[derive(Debug, Encode, Decode, Clone)]
+pub struct ElectionData<B: BlockT>{
+	pub block_hash: B::Hash,
+	pub sig_bytes: Vec<u8>,
+	// pub author_list: Vec<Vec<u8>>,
+	pub vote_list: Vec<VoteData<B>>,
+	pub committee_pub_bytes: Vec<u8>,
+}
+
+impl<B: BlockT> PartialEq for ElectionData<B>{
+    fn eq(&self, other: &Self) -> bool {
+		(self.block_hash == other.block_hash) &&
+		(self.sig_bytes == other.sig_bytes) &&
+		(self.vote_list == other.vote_list) &&
+		(self.committee_pub_bytes == other.committee_pub_bytes)
+    }
+}
+impl<B: BlockT> Eq for ElectionData<B>{}

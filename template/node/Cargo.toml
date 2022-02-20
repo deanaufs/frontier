@@ -28,11 +28,11 @@ sc-telemetry = { version = "4.0.0-dev", path = "../../client/telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../../client/keystore" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../client/transaction-pool/api" }
-sc-consensus-aura = { version = "0.10.0-dev", path = "../../client/consensus/aura" }
-sp-consensus-aura = { version = "0.10.0-dev", path = "../../primitives/consensus/aura" }
+# sc-consensus-aura = { version = "0.10.0-dev", path = "../../client/consensus/aura" }
+# sp-consensus-aura = { version = "0.10.0-dev", path = "../../primitives/consensus/aura" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../client/consensus/common" }
-sc-consensus-manual-seal = { version = "0.10.0-dev", path = "../../client/consensus/manual-seal" }
+# sc-consensus-manual-seal = { version = "0.10.0-dev", path = "../../client/consensus/manual-seal" }
 sc-network = { version = "0.10.0-dev", path = "../../client/network" }
 sc-finality-grandpa = { version = "0.10.0-dev", path = "../../client/finality-grandpa" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
@@ -40,7 +40,6 @@ sc-client-api = { version = "4.0.0-dev", path = "../../client/api" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../primitives/timestamp" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
-
 # sc-cli = { git = "https://github.com/paritytech/substrate", features = ["wasmtime"] }
 # sp-core = { git = "https://github.com/paritytech/substrate" }
 # sc-executor = { git = "https://github.com/paritytech/substrate", features = ["wasmtime"] }
@@ -61,6 +60,9 @@ sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 # sp-runtime = { git = "https://github.com/paritytech/substrate" }
 # sp-timestamp = { git = "https://github.com/paritytech/substrate" }
 # sp-inherents = { git = "https://github.com/paritytech/substrate" }
+
+sc-consensus-vote-election = { version = "0.10.0-dev", path = "../../client/consensus/vote-election" }
+sp-consensus-vote-election = { version = "0.10.0-dev", path = "../../primitives/consensus/vote-election" }
 
 # These dependencies are used for the node template's RPCs
 jsonrpc-core = "18.0.0"

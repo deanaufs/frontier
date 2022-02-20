@@ -14,7 +14,8 @@ use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use sp_api::impl_runtime_apis;
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_consensus_vote_election::sr25519::AuthorityId as AuraId;
+// use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{
 	crypto::{KeyTypeId, Public},
 	OpaqueMetadata, H160, H256, U256,
@@ -100,7 +101,8 @@ pub mod opaque {
 
 	impl_opaque_keys! {
 		pub struct SessionKeys {
-			pub aura: Aura,
+			pub vote_election: VoteElection,
+			// pub aura: Aura,
 			pub grandpa: Grandpa,
 		}
 	}
@@ -204,11 +206,17 @@ parameter_types! {
 	pub const MaxAuthorities: u32 = 100;
 }
 
-impl pallet_aura::Config for Runtime {
+impl pallet_vote_election::Config for Runtime {
 	type AuthorityId = AuraId;
 	type DisabledValidators = ();
 	type MaxAuthorities = MaxAuthorities;
+	// type MaxAuthorities = ConstU32<32>;
 }
+// impl pallet_aura::Config for Runtime {
+// 	type AuthorityId = AuraId;
+// 	type DisabledValidators = ();
+// 	type MaxAuthorities = MaxAuthorities;
+// }
 
 impl pallet_grandpa::Config for Runtime {
 	type Event = Event;
@@ -238,10 +246,11 @@ impl pallet_timestamp::Config for Runtime {
 	type Moment = u64;
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
-	#[cfg(feature = "aura")]
-	type OnTimestampSet = Aura;
-	#[cfg(feature = "manual-seal")]
-	type OnTimestampSet = ();
+	type OnTimestampSet = VoteElection;
+	// #[cfg(feature = "aura")]
+	// type OnTimestampSet = Aura;
+	// #[cfg(feature = "manual-seal")]
+	// type OnTimestampSet = ();
 }
 
 parameter_types! {
@@ -287,10 +296,11 @@ impl<F: FindAuthor<u32>> FindAuthor<H160> for FindAuthorTruncated<F> {
 	where
 		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 	{
-		if let Some(author_index) = F::find_author(digests) {
-			let authority_id = Aura::authorities()[author_index as usize].clone();
-			return Some(H160::from_slice(&authority_id.to_raw_vec()[4..24]));
-		}
+		// if let Some(author_index) = F::find_author(digests) {
+		// 	let authority_id = VoteElection::authorities()[author_index as usize].clone();
+		// 	// let authority_id = Aura::authorities()[author_index as usize].clone();
+		// 	return Some(H160::from_slice(&authority_id.to_raw_vec()[4..24]));
+		// }
 		None
 	}
 }
@@ -316,7 +326,8 @@ impl pallet_evm::Config for Runtime {
 	type ChainId = ChainId;
 	type BlockGasLimit = BlockGasLimit;
 	type OnChargeTransaction = ();
-	type FindAuthor = FindAuthorTruncated<Aura>;
+	type FindAuthor = FindAuthorTruncated<VoteElection>;
+	// type FindAuthor = FindAuthorTruncated<Aura>;
 }
 
 impl pallet_ethereum::Config for Runtime {
@@ -369,7 +380,8 @@ construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet, Storage},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Aura: pallet_aura::{Pallet, Config<T>},
+		VoteElection: pallet_vote_election::{Pallet, Config<T>},
+		// Aura: pallet_aura::{Pallet, Config<T>},
 		Grandpa: pallet_grandpa::{Pallet, Call, Storage, Config, Event},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
@@ -544,15 +556,24 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
-		fn slot_duration() -> sp_consensus_aura::SlotDuration {
-			sp_consensus_aura::SlotDuration::from_millis(Aura::slot_duration())
+	impl sp_consensus_vote_election::AuraApi<Block, AuraId> for Runtime {
+		fn slot_duration() -> sp_consensus_vote_election::SlotDuration {
+			sp_consensus_vote_election::SlotDuration::from_millis(VoteElection::slot_duration())
 		}
 
 		fn authorities() -> Vec<AuraId> {
-			Aura::authorities().to_vec()
+			VoteElection::authorities().into_inner()
 		}
 	}
+	// impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
+	// 	fn slot_duration() -> sp_consensus_aura::SlotDuration {
+	// 		sp_consensus_aura::SlotDuration::from_millis(Aura::slot_duration())
+	// 	}
+
+	// 	fn authorities() -> Vec<AuraId> {
+	// 		Aura::authorities().to_vec()
+	// 	}
+	// }
 
 	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 		fn account_nonce(account: AccountId) -> Index {

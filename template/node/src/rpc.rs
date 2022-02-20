@@ -14,7 +14,7 @@ use sc_client_api::{
 	backend::{AuxStore, Backend, StateBackend, StorageProvider},
 	client::BlockchainEvents,
 };
-use sc_consensus_manual_seal::rpc::{ManualSeal, ManualSealApi};
+// use sc_consensus_manual_seal::rpc::{ManualSeal, ManualSealApi};
 use sc_network::NetworkService;
 use sc_rpc::SubscriptionTaskExecutor;
 use sc_rpc_api::DenyUnsafe;
@@ -64,9 +64,9 @@ pub struct FullDeps<C, P, A: ChainApi> {
 	pub fee_history_limit: u64,
 	/// Fee history cache.
 	pub fee_history_cache: FeeHistoryCache,
-	/// Manual seal command sink
-	pub command_sink:
-		Option<futures::channel::mpsc::Sender<sc_consensus_manual_seal::rpc::EngineCommand<Hash>>>,
+	// /// Manual seal command sink
+	// pub command_sink:
+	// 	Option<futures::channel::mpsc::Sender<sc_consensus_manual_seal::rpc::EngineCommand<Hash>>>,
 	/// Ethereum data access overrides.
 	pub overrides: Arc<OverrideHandle<Block>>,
 	/// Cache for Ethereum block data.
@@ -144,7 +144,7 @@ where
 		is_authority,
 		network,
 		filter_pool,
-		command_sink,
+		// command_sink,
 		backend,
 		max_past_logs,
 		fee_history_limit,
@@ -215,16 +215,16 @@ where
 		overrides,
 	)));
 
-	match command_sink {
-		Some(command_sink) => {
-			io.extend_with(
-				// We provide the rpc handler with the sending end of the channel to allow the rpc
-				// send EngineCommands to the background block authorship task.
-				ManualSealApi::to_delegate(ManualSeal::new(command_sink)),
-			);
-		}
-		_ => {}
-	}
+	// match command_sink {
+	// 	Some(command_sink) => {
+	// 		io.extend_with(
+	// 			// We provide the rpc handler with the sending end of the channel to allow the rpc
+	// 			// send EngineCommands to the background block authorship task.
+	// 			ManualSealApi::to_delegate(ManualSeal::new(command_sink)),
+	// 		);
+	// 	}
+	// 	_ => {}
+	// }
 
 	io
 }

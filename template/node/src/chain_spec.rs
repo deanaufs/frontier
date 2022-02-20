@@ -1,9 +1,11 @@
 use frontier_template_runtime::{
-	AccountId, AuraConfig, BalancesConfig, EVMConfig, EthereumConfig, GenesisConfig, GrandpaConfig,
+	AccountId, VoteElectionConfig, BalancesConfig, EVMConfig, EthereumConfig, GenesisConfig, GrandpaConfig,
+	// AccountId, AuraConfig, BalancesConfig, EVMConfig, EthereumConfig, GenesisConfig, GrandpaConfig,
 	Signature, SudoConfig, SystemConfig, WASM_BINARY,
 };
 use sc_service::ChainType;
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_consensus_vote_election::sr25519::AuthorityId as AuraId;
+// use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{sr25519, Pair, Public, H160, U256};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
@@ -148,9 +150,12 @@ fn testnet_genesis(
 				.map(|k| (k, 1 << 60))
 				.collect(),
 		},
-		aura: AuraConfig {
+		vote_election: VoteElectionConfig{
 			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
 		},
+		// aura: AuraConfig {
+		// 	authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
+		// },
 		grandpa: GrandpaConfig {
 			authorities: initial_authorities
 				.iter()

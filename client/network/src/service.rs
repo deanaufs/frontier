@@ -45,6 +45,7 @@ use crate::{
 		sync::{Status as SyncStatus, SyncState},
 		NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready,
 	},
+	vote_election,
 	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus, ReputationChange,
 };
 
@@ -69,6 +70,7 @@ use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
+use sp_consensus::VoteElectionRequest;
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -174,6 +176,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			.network_config
 			.extra_sets
 			.insert(0, transactions_handler_proto.set_config());
+
+		let vote_election_handler_proto = 
+			vote_election::VoteElectionHandlerPrototype::new(params.protocol_id.clone());
+		params
+			.network_config
+			.extra_sets
+			.insert(0, vote_election_handler_proto.set_config());
 
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
@@ -438,6 +447,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		)?;
 		(params.transactions_handler_executor)(tx_handler.run().boxed());
 
+		let (ve_handler, ve_handler_controller) = vote_election_handler_proto.build(
+			service.clone(),
+			params.metrics_registry.as_ref(),
+		)?;
+		(params.transactions_handler_executor)(ve_handler.run().boxed());
+
 		Ok(NetworkWorker {
 			external_addresses,
 			num_connected,
@@ -450,6 +465,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			peers_notifications_sinks,
 			tx_handler_controller,
+			ve_handler_controller,
 			metrics,
 			boot_node_ids,
 		})
@@ -1256,7 +1272,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 }
 
-impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for NetworkService<B, H> {
+impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle<B> for NetworkService<B, H> {
 	fn is_major_syncing(&mut self) -> bool {
 		Self::is_major_syncing(self)
 	}
@@ -1264,15 +1280,23 @@ impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for NetworkServic
 	fn is_offline(&mut self) -> bool {
 		self.num_connected.load(Ordering::Relaxed) == 0
 	}
+
+	fn ve_request(&mut self, request:VoteElectionRequest<B>){
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::VoteElectionRequest(request));
+	}
 }
 
-impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for &'a NetworkService<B, H> {
+impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle<B> for &'a NetworkService<B, H> {
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
 	}
 
 	fn is_offline(&mut self) -> bool {
 		self.num_connected.load(Ordering::Relaxed) == 0
+	}
+
+	fn ve_request(&mut self, request:VoteElectionRequest<B>){
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::VoteElectionRequest(request));
 	}
 }
 
@@ -1387,6 +1411,7 @@ pub enum NotificationSenderError {
 ///
 /// Each entry corresponds to a method of `NetworkService`.
 enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
+	VoteElectionRequest(VoteElectionRequest<B>),
 	PropagateTransaction(H),
 	PropagateTransactions,
 	RequestJustification(B::Hash, NumberFor<B>),
@@ -1454,6 +1479,8 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, Cow<'static, str>), NotificationsSink>>>,
 	/// Controller for the handler of incoming and outgoing transactions.
 	tx_handler_controller: transactions::TransactionsHandlerController<H>,
+	/// Controller for vote-election
+	ve_handler_controller: vote_election::VoteElectionHandlerController<B>,
 }
 
 impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
@@ -1507,6 +1534,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			};
 
 			match msg {
+				ServiceToWorkerMsg::VoteElectionRequest(request)=>
+					this.ve_handler_controller.handle_request(request),
 				ServiceToWorkerMsg::AnnounceBlock(hash, data) => this
 					.network_service
 					.behaviour_mut()

@@ -9,8 +9,10 @@ repository = "https://github.com/paritytech/frontier/"
 description = "BLAKE2 precompiles for EVM pallet."
 
 [dependencies]
-sp-core = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate" }
-sp-io = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate" }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/core" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/io" }
+# sp-core = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate" }
+# sp-io = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate" }
 fp-evm = { version = "3.0.0-dev", default-features = false, path = "../../../../primitives/evm" }
 
 [dev-dependencies]

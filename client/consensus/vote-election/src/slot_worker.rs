@@ -863,7 +863,7 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 					futures::select!{
 						block = imported_blocks_stream.next()=>{
 							if let Some(block) = block{
-								log::info!("Author.S1, Import block: #{} ({})", block.header.number(), block.hash);
+								log::info!("Author.S1, import block: #{} ({})", block.header.number(), block.hash);
 								if sync_oracle.is_major_syncing(){
 									state = AuthorState::WaitStart;
 									break;
@@ -882,7 +882,7 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 
 								if new_block_election_info.weight <= min_election_weight {	// exceed 51%
 									log::info!(
-										"Author.S1, block #{} ({}) outside with exceed 50% election", 
+										"Author.S1, block #{} ({}) from outside with exceed 50% election", 
 										block.header.number(),
 										block.hash
 									);

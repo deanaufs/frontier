@@ -1,4 +1,4 @@
-spec_file="./tmp/RawSpec.json"
+spec_file="./tmp/RawAuraSpec.json"
 
 # 节点1
 # 将aura 和 grandpa key添加到对应节点里面

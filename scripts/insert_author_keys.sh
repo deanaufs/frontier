@@ -1,3 +1,5 @@
+spec_file="./tmp/RawAuraSpec.json"
+
 # 节点1
 # 将aura key添加到对应节点里面
 ./target/debug/frontier-template-node key insert \

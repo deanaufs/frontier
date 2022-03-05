@@ -477,6 +477,7 @@ fn rpc_interface(
 	rpc_methods: RpcMethods,
 	is_validator: bool,
 ) -> Result<IpAddr> {
+	// log::info!("{}, {}", Ipv4Addr::UNSPECIFIED, Ipv4Addr::LOCALHOST);
 	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe {
 		return Err(Error::Input(
 			"--rpc-external and --ws-external options shouldn't be used if the node is running as \

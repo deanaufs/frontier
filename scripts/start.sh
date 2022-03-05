@@ -1,5 +1,5 @@
 bootnode_peer_id="12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp"
-spce_file="./tmp/RawAuraSpec.json"
+spec_file="./tmp/RawAuraSpec.json"
 
 # 启动节点C01
 ./target/debug/frontier-template-node purge-chain --base-path ./tmp/C01 --chain local -y;\

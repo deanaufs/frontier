@@ -2,7 +2,7 @@ PORT, WS_PORT, RPC_PORT = 33331, 1801, 1851
 committee_count = 12
 author_count = 20
 app_name = "frontier-template-node"
-spec_file_config = "spce_file=\"./tmp/RawAuraSpec.json\""
+spec_file_config = "spec_file=\"./tmp/RawAuraSpec.json\""
 
 boot_node_str = """# 启动节点C01
 ./target/debug/{3} purge-chain --base-path ./tmp/C01 --chain local -y;\\

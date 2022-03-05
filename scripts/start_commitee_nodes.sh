@@ -1,10 +1,10 @@
 bootnode_peer_id="12D3KooWJThfTb9iRQooS1UwCLA3vpyiGYGwHyxswzK19v2ENgbm"
-spec_file="./tmp/RawSpec.json"
+spec_file="./tmp/RawAuraSpec.json"
 
 # 启动节点1
-# 按照生成的Raw配置文件启动node-template
-./target/debug/node-template purge-chain --base-path ./tmp/C01 --chain local -y;\
-./target/debug/node-template \
+# 按照生成的Raw配置文件启动frontier-template-node
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/C01 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/C01 \
     --chain $spec_file \
     --port 30333 \
@@ -17,9 +17,9 @@ spec_file="./tmp/RawSpec.json"
 sleep 0.1s
 
 # 启动节点2
-# 按照生成的Raw配置文件启动node-template
-./target/debug/node-template purge-chain --base-path ./tmp/C02 --chain local -y;\
-./target/debug/node-template \
+# 按照生成的Raw配置文件启动frontier-template-node
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/C02 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/C02 \
     --chain $spec_file \
     --port 30334 \
@@ -33,9 +33,9 @@ sleep 0.1s
 sleep 0.1s
 
 # 启动节点3
-# 按照生成的Raw配置文件启动node-template
-./target/debug/node-template purge-chain --base-path ./tmp/C03 --chain local -y;\
-./target/debug/node-template \
+# 按照生成的Raw配置文件启动frontier-template-node
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/C03 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/C03 \
     --chain $spec_file \
     --port 30335 \
@@ -49,9 +49,9 @@ sleep 0.1s
 sleep 0.1s
 
 # 启动节点4
-# 按照生成的Raw配置文件启动node-template
-./target/debug/node-template purge-chain --base-path ./tmp/C04 --chain local -y;\
-./target/debug/node-template \
+# 按照生成的Raw配置文件启动frontier-template-node
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/C04 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/C04 \
     --chain $spec_file \
     --port 30336 \
@@ -65,9 +65,9 @@ sleep 0.1s
 sleep 0.1s
 
 # 启动节点5
-# 按照生成的Raw配置文件启动node-template
-./target/debug/node-template purge-chain --base-path ./tmp/C05 --chain local -y;\
-./target/debug/node-template \
+# 按照生成的Raw配置文件启动frontier-template-node
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/C05 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/C05 \
     --chain $spec_file \
     --port 30337 \
@@ -81,9 +81,9 @@ sleep 0.1s
 sleep 0.1s
 
 # 启动节点6
-# 按照生成的Raw配置文件启动node-template
-./target/debug/node-template purge-chain --base-path ./tmp/C06 --chain local -y;\
-./target/debug/node-template \
+# 按照生成的Raw配置文件启动frontier-template-node
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/C06 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/C06 \
     --chain $spec_file \
     --port 30338 \
@@ -97,9 +97,9 @@ sleep 0.1s
 sleep 0.1s
 
 # 启动节点7
-# 按照生成的Raw配置文件启动node-template
-./target/debug/node-template purge-chain --base-path ./tmp/C07 --chain local -y;\
-./target/debug/node-template \
+# 按照生成的Raw配置文件启动frontier-template-node
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/C07 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/C07 \
     --chain $spec_file \
     --port 30339 \
@@ -113,9 +113,9 @@ sleep 0.1s
 sleep 0.1s
 
 # 启动节点8
-# 按照生成的Raw配置文件启动node-template
-./target/debug/node-template purge-chain --base-path ./tmp/C08 --chain local -y;\
-./target/debug/node-template \
+# 按照生成的Raw配置文件启动frontier-template-node
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/C08 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/C08 \
     --chain $spec_file \
     --port 30340 \
@@ -129,9 +129,9 @@ sleep 0.1s
 sleep 0.1s
 
 # # 启动节点9
-# # 按照生成的Raw配置文件启动node-template
-# ./target/debug/node-template purge-chain --base-path ./tmp/C09 --chain local -y;\
-# ./target/debug/node-template \
+# # 按照生成的Raw配置文件启动frontier-template-node
+# ./target/debug/frontier-template-node purge-chain --base-path ./tmp/C09 --chain local -y;\
+# ./target/debug/frontier-template-node \
 #     --base-path ./tmp/C09 \
 #     --chain $spec_file \
 #     --port 30341 \
@@ -145,9 +145,9 @@ sleep 0.1s
 # sleep 0.1s
 
 # # 启动节点10
-# # 按照生成的Raw配置文件启动node-template
-# ./target/debug/node-template purge-chain --base-path ./tmp/C10 --chain local -y;\
-# ./target/debug/node-template \
+# # 按照生成的Raw配置文件启动frontier-template-node
+# ./target/debug/frontier-template-node purge-chain --base-path ./tmp/C10 --chain local -y;\
+# ./target/debug/frontier-template-node \
 #     --base-path ./tmp/C10 \
 #     --chain $spec_file \
 #     --port 30342 \

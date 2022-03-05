@@ -1,6 +1,6 @@
 # 节点1
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N01 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -10,7 +10,7 @@
 
 # 节点2
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N02 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -20,7 +20,7 @@
 
 # 节点3
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N03 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -30,7 +30,7 @@
 
 # 节点4
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N04 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -40,7 +40,7 @@
 
 # 节点5
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N05 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -50,7 +50,7 @@
 
 # 节点6
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N06 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -60,7 +60,7 @@
 
 # 节点7
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N07 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -70,7 +70,7 @@
 
 # 节点8
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N08 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -80,7 +80,7 @@
 
 # 节点9
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N09 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -90,7 +90,7 @@
 
 # 节点10
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N10 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -100,7 +100,7 @@
 
 # 节点11
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N11 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -110,7 +110,7 @@
 
 # 节点12
 # 将aura key添加到对应节点里面
-./target/debug/node-template key insert \
+./target/debug/frontier-template-node key insert \
     --base-path ./tmp/N12 \
     --chain $spec_file \
     --scheme Sr25519 \
@@ -120,7 +120,7 @@
 
 # # 节点13
 # # 将aura key添加到对应节点里面
-# ./target/debug/node-template key insert \
+# ./target/debug/frontier-template-node key insert \
 #     --base-path ./tmp/N13 \
 #     --chain $spec_file \
 #     --scheme Sr25519 \
@@ -130,7 +130,7 @@
 
 # # 节点14
 # # 将aura key添加到对应节点里面
-# ./target/debug/node-template key insert \
+# ./target/debug/frontier-template-node key insert \
 #     --base-path ./tmp/N14 \
 #     --chain $spec_file \
 #     --scheme Sr25519 \
@@ -140,7 +140,7 @@
 
 # # 节点15
 # # 将aura key添加到对应节点里面
-# ./target/debug/node-template key insert \
+# ./target/debug/frontier-template-node key insert \
 #     --base-path ./tmp/N15 \
 #     --chain $spec_file \
 #     --scheme Sr25519 \
@@ -150,7 +150,7 @@
 
 # # 节点16
 # # 将aura key添加到对应节点里面
-# ./target/debug/node-template key insert \
+# ./target/debug/frontier-template-node key insert \
 #     --base-path ./tmp/N16 \
 #     --chain $spec_file \
 #     --scheme Sr25519 \
@@ -160,7 +160,7 @@
 
 # # 节点17
 # # 将aura key添加到对应节点里面
-# ./target/debug/node-template key insert \
+# ./target/debug/frontier-template-node key insert \
 #     --base-path ./tmp/N17 \
 #     --chain $spec_file \
 #     --scheme Sr25519 \
@@ -170,7 +170,7 @@
 
 # # 节点18
 # # 将aura key添加到对应节点里面
-# ./target/debug/node-template key insert \
+# ./target/debug/frontier-template-node key insert \
 #     --base-path ./tmp/N18 \
 #     --chain $spec_file \
 #     --scheme Sr25519 \
@@ -180,7 +180,7 @@
 
 # # 节点19
 # # 将aura key添加到对应节点里面
-# ./target/debug/node-template key insert \
+# ./target/debug/frontier-template-node key insert \
 #     --base-path ./tmp/N19 \
 #     --chain $spec_file \
 #     --scheme Sr25519 \
@@ -190,7 +190,7 @@
 
 # # 节点20
 # # 将aura key添加到对应节点里面
-# ./target/debug/node-template key insert \
+# ./target/debug/frontier-template-node key insert \
 #     --base-path ./tmp/N20 \
 #     --chain $spec_file \
 #     --scheme Sr25519 \

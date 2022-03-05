@@ -4,7 +4,7 @@
 # 根据模板，修改customSpec.json的aura, grandp内容，
 
 # 产生启动时可用的Raw配置文件
-./target/debug/node-template build-spec --chain=customSpec.json --raw --disable-default-bootnode > ./tmp/RawAuraSpec.json
+./target/debug/node-template build-spec --chain=./tmp/AuraSpec.json --raw --disable-default-bootnode > ./tmp/RawAuraSpec.json
 
 # 单独启动流程
 
@@ -32,7 +32,7 @@
 ./target/debug/node-template key insert \
 --base-path ./tmp/node01 \
 --chain ./tmp/RawAuraSpec.json \
---scheme Sr25519 \
+--scheme Sr25519 \./tmp/AuraSpec
 --suri 0xe6c08bae89e39c5e4ed300b5824d7222f099a66121b24ec377e4b23b379ebada \
 --password 123456 \
 --key-type gran 

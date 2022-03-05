@@ -1,9 +1,9 @@
 bootnode_peer_id="12D3KooWJThfTb9iRQooS1UwCLA3vpyiGYGwHyxswzK19v2ENgbm"
-spec_file = "./tmp/RawSpec.json"
+spec_file = "./tmp/RawAuraSpec.json"
 
 # Node1
-./target/debug/node-template purge-chain --base-path ./tmp/N01 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N01 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N01 \
     --chain $spec_file \
     --port 30353 \
@@ -16,8 +16,8 @@ spec_file = "./tmp/RawSpec.json"
 sleep 0.1s
 
 # Node2
-./target/debug/node-template purge-chain --base-path ./tmp/N02 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N02 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N02 \
     --chain $spec_file \
     --port 30354 \
@@ -30,8 +30,8 @@ sleep 0.1s
 sleep 0.1s
 
 # Node3
-./target/debug/node-template purge-chain --base-path ./tmp/N03 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N03 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N03 \
     --chain $spec_file \
     --port 30355 \
@@ -44,8 +44,8 @@ sleep 0.1s
 sleep 0.1s
 
 # Node4
-./target/debug/node-template purge-chain --base-path ./tmp/N04 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N04 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N04 \
     --chain $spec_file \
     --port 30356 \
@@ -58,8 +58,8 @@ sleep 0.1s
 sleep 0.1s
 
 # Node5
-./target/debug/node-template purge-chain --base-path ./tmp/N05 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N05 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N05 \
     --chain $spec_file \
     --port 30357 \
@@ -72,8 +72,8 @@ sleep 0.1s
 sleep 0.1s
 
 # Node6
-./target/debug/node-template purge-chain --base-path ./tmp/N06 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N06 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N06 \
     --chain $spec_file \
     --port 30358 \
@@ -86,8 +86,8 @@ sleep 0.1s
 sleep 0.1s
 
 # Node7
-./target/debug/node-template purge-chain --base-path ./tmp/N07 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N07 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N07 \
     --chain $spec_file \
     --port 30359 \
@@ -100,8 +100,8 @@ sleep 0.1s
 sleep 0.1s
 
 # Node8
-./target/debug/node-template purge-chain --base-path ./tmp/N08 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N08 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N08 \
     --chain $spec_file \
     --port 30360 \
@@ -114,8 +114,8 @@ sleep 0.1s
 sleep 0.1s
 
 # Node9
-./target/debug/node-template purge-chain --base-path ./tmp/N09 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N09 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N09 \
     --chain $spec_file \
     --port 30361 \
@@ -128,8 +128,8 @@ sleep 0.1s
 sleep 0.1s
 
 # Node10
-./target/debug/node-template purge-chain --base-path ./tmp/N10 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N10 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N10 \
     --chain $spec_file \
     --port 30362 \
@@ -142,8 +142,8 @@ sleep 0.1s
 sleep 0.1s
 
 # Node11
-./target/debug/node-template purge-chain --base-path ./tmp/N11 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N11 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N11 \
     --chain $spec_file \
     --port 30363 \
@@ -156,8 +156,8 @@ sleep 0.1s
 sleep 0.1s
 
 # Node12
-./target/debug/node-template purge-chain --base-path ./tmp/N12 --chain local -y;\
-./target/debug/node-template \
+./target/debug/frontier-template-node purge-chain --base-path ./tmp/N12 --chain local -y;\
+./target/debug/frontier-template-node \
     --base-path ./tmp/N12 \
     --chain $spec_file \
     --port 30364 \
@@ -170,8 +170,8 @@ sleep 0.1s
 sleep 0.1s
 
 # # Node13
-# ./target/debug/node-template purge-chain --base-path ./tmp/N13 --chain local -y;\
-# ./target/debug/node-template \
+# ./target/debug/frontier-template-node purge-chain --base-path ./tmp/N13 --chain local -y;\
+# ./target/debug/frontier-template-node \
 #     --base-path ./tmp/N13 \
 #     --chain $spec_file \
 #     --port 30365 \
@@ -184,8 +184,8 @@ sleep 0.1s
 # sleep 0.1s
 
 # # Node14
-# ./target/debug/node-template purge-chain --base-path ./tmp/N14 --chain local -y;\
-# ./target/debug/node-template \
+# ./target/debug/frontier-template-node purge-chain --base-path ./tmp/N14 --chain local -y;\
+# ./target/debug/frontier-template-node \
 #     --base-path ./tmp/N14 \
 #     --chain $spec_file \
 #     --port 30366 \
@@ -198,8 +198,8 @@ sleep 0.1s
 # sleep 0.1s
 
 # # Node15
-# ./target/debug/node-template purge-chain --base-path ./tmp/N15 --chain local -y;\
-# ./target/debug/node-template \
+# ./target/debug/frontier-template-node purge-chain --base-path ./tmp/N15 --chain local -y;\
+# ./target/debug/frontier-template-node \
 #     --base-path ./tmp/N15 \
 #     --chain $spec_file \
 #     --port 30367 \
@@ -212,8 +212,8 @@ sleep 0.1s
 # sleep 0.1s
 
 # # Node16
-# ./target/debug/node-template purge-chain --base-path ./tmp/N16 --chain local -y;\
-# ./target/debug/node-template \
+# ./target/debug/frontier-template-node purge-chain --base-path ./tmp/N16 --chain local -y;\
+# ./target/debug/frontier-template-node \
 #     --base-path ./tmp/N16 \
 #     --chain $spec_file \
 #     --port 30368 \
@@ -226,8 +226,8 @@ sleep 0.1s
 # sleep 0.1s
 
 # # Node17
-# ./target/debug/node-template purge-chain --base-path ./tmp/N17 --chain local -y;\
-# ./target/debug/node-template \
+# ./target/debug/frontier-template-node purge-chain --base-path ./tmp/N17 --chain local -y;\
+# ./target/debug/frontier-template-node \
 #     --base-path ./tmp/N17 \
 #     --chain $spec_file \
 #     --port 30369 \
@@ -240,8 +240,8 @@ sleep 0.1s
 # sleep 0.1s
 
 # # Node18
-# ./target/debug/node-template purge-chain --base-path ./tmp/N18 --chain local -y;\
-# ./target/debug/node-template \
+# ./target/debug/frontier-template-node purge-chain --base-path ./tmp/N18 --chain local -y;\
+# ./target/debug/frontier-template-node \
 #     --base-path ./tmp/N18 \
 #     --chain $spec_file \
 #     --port 30370 \
@@ -254,8 +254,8 @@ sleep 0.1s
 # sleep 0.1s
 
 # # Node19
-# ./target/debug/node-template purge-chain --base-path ./tmp/N19 --chain local -y;\
-# ./target/debug/node-template \
+# ./target/debug/frontier-template-node purge-chain --base-path ./tmp/N19 --chain local -y;\
+# ./target/debug/frontier-template-node \
 #     --base-path ./tmp/N19 \
 #     --chain $spec_file \
 #     --port 30371 \
@@ -268,8 +268,8 @@ sleep 0.1s
 # sleep 0.1s
 
 # # Node20
-# ./target/debug/node-template purge-chain --base-path ./tmp/N20 --chain local -y;\
-# ./target/debug/node-template \
+# ./target/debug/frontier-template-node purge-chain --base-path ./tmp/N20 --chain local -y;\
+# ./target/debug/frontier-template-node \
 #     --base-path ./tmp/N20 \
 #     --chain $spec_file \
 #     --port 30372 \

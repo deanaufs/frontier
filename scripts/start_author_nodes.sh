@@ -1,5 +1,5 @@
 bootnode_peer_id="12D3KooWJThfTb9iRQooS1UwCLA3vpyiGYGwHyxswzK19v2ENgbm"
-spec_file = "./tmp/RawAuraSpec.json"
+spec_file="./tmp/RawAuraSpec.json"
 
 # Node1
 ./target/debug/frontier-template-node purge-chain --base-path ./tmp/N01 --chain local -y;\

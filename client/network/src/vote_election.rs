@@ -277,6 +277,7 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 			Event::NotificationStreamOpened { remote, protocol, role, .. }
 				if protocol == self.protocol_name =>
 			{
+				log::info!("insert new peer: {:?}", remote);
 				let _was_in = self.peers.insert(
 					remote,
 					Peer {
@@ -297,6 +298,8 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 			Event::NotificationStreamClosed { remote, protocol }
 				if protocol == self.protocol_name =>
 			{
+				log::info!("remove peer: {:?}", remote);
+
 				let _peer = self.peers.remove(&remote);
 				debug_assert!(_peer.is_some());
 			}
@@ -323,7 +326,7 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 									});
 
 									self.pending_votes.push(vote_data.clone());
-									if self.pending_votes.len() > MAX_PENDINGS{
+									while self.pending_votes.len() > MAX_PENDINGS{
 										self.pending_votes.remove(0);
 									}
 								}
@@ -344,7 +347,7 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 									});
 
 									self.pending_elections.push(election_data.clone());
-									if self.pending_elections.len() > MAX_PENDINGS{
+									while self.pending_elections.len() > MAX_PENDINGS{
 										self.pending_elections.remove(0);
 									}
 								}

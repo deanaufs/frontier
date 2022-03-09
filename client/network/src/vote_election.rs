@@ -22,16 +22,16 @@ use std::{
 	sync::{
 		Arc,
 	},
-	time,
+	time::{SystemTime, Duration},
 };
 
 use sp_consensus::{VoteData, VoteElectionRequest, ElectionData};
 use sp_core::{blake2_256, H256};
 
-const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(3900);
+const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(3900);
 const MAX_NOTIFICATION_SIZE: u64 = 16 * 1024 * 1024;
 const MAX_KNOWN_NOTIFICATIONS: usize = 1024; // ~300kb per peer + overhead.
-const MAX_PENDINGS: usize = 512;
+const MAX_PENDINGS: usize = 256*2;
 
 struct Metrics {
 	propagated_numbers: Counter<U64>,
@@ -317,10 +317,9 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 								// log::info!("<<<< vote_v2: {:?} from: {:?}", vote_data, remote);
 
 								// self.pending_votes.insert(vote_hash.clone(), vote_data.clone());
-								let vote_hash = hash_of(&vote_data);
 
 								if !self.pending_votes.contains(&vote_data){
-									// send to consensus
+									// send to client consensus
 									self.vote_notification_tx.as_ref().map(|v|{
 										let _ = v.unbounded_send(vote_data.clone());
 									});
@@ -331,27 +330,28 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 									}
 								}
 
+								let vote_hash = hash_of(&vote_data);
 								if let Some(ref mut peer) = self.peers.get_mut(&who) {
 									peer.known_votes.insert(vote_hash.clone());
 								}
 
 							},
 							VoteElectionNotification::Election(election_data)=>{
-								let election_hash = hash_of(&election_data);
 
 								if !self.pending_elections.contains(&election_data){
 									// send to consensus
 									self.election_notification_tx.as_ref().map(|v|{
-										// log::info!("Election");
 										let _ = v.unbounded_send(election_data.clone());
 									});
 
 									self.pending_elections.push(election_data.clone());
 									while self.pending_elections.len() > MAX_PENDINGS{
+										// log::info!("update pending elections: {}", election_data.block_hash);
 										self.pending_elections.remove(0);
 									}
 								}
 
+								let election_hash = hash_of(&election_data);
 								if let Some(ref mut peer) = self.peers.get_mut(&who) {
 									peer.known_elections.insert(election_hash.clone());
 								}
@@ -367,12 +367,32 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 	}
 
 	fn propagate_vote_and_election(&mut self){
-		let pending_elections = self.pending_elections.clone();
+		let pending_elections = {
+			let propagate_count = MAX_PENDINGS/2;
+			if self.pending_elections.len() < propagate_count {
+				self.pending_elections.clone()
+			}
+			else{
+				let start = self.pending_elections.len() - propagate_count;
+				self.pending_elections.clone().drain(start..).collect()
+			}
+		};
+
 		for election_data in pending_elections.iter(){
 			self.propagate_election(election_data.clone());
 		}
 
-		let pending_votes = self.pending_votes.clone();
+		let pending_votes = {
+			let propagate_count = MAX_PENDINGS/2;
+			if self.pending_votes.len() < propagate_count {
+				self.pending_votes.clone()
+			}
+			else{
+				let start = self.pending_votes.len() - propagate_count;
+				self.pending_votes.clone().drain(start..).collect()
+			}
+		};
+
 		for vote_data in pending_votes.iter(){
 			self.propagate_vote(vote_data.clone());
 		}

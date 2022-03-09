@@ -763,7 +763,7 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 		match state {
 			AuthorState::WaitStart=>{
 				log::info!("► AuthorState::S0, wait block or timeout");
-				let full_timeout_duration = Duration::from_secs(10);
+				let full_timeout_duration = Duration::from_secs(COMMITTEE_TIMEOUT+2);
 				let start_time = SystemTime::now();
 				loop{
 					let elapsed_duration = start_time.elapsed().unwrap_or(full_timeout_duration);
@@ -912,7 +912,7 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 						election = election_rx.select_next_some()=>{
 							if election.block_hash != cur_header.hash(){
 								log::info!(
-									"Author.S1, election hash dismatch: cur: #{} ({}), recv: {}",
+									"Author.S1, election mismatch: cur: #{} ({}), recv: {}",
 									cur_header.number(),
 									cur_header.hash(),
 									election.block_hash,
@@ -1113,7 +1113,7 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 		match state{
 			CommitteeState::WaitStart=>{
 				log::info!("► CommitteeState::S0, wait start");
-				let full_timeout_duration = Duration::from_secs(10);
+				let full_timeout_duration = Duration::from_secs(COMMITTEE_TIMEOUT+2);
 				let start_time = SystemTime::now();
 
 				loop{

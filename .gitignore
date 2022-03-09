@@ -1,5 +1,6 @@
 **/target/
 **/tmp/
+**/log/
 **/node_modules/
 **/*.rs.bk
 *.swp

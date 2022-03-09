@@ -7613,6 +7613,7 @@ dependencies = [
  "async-trait",
  "futures 0.3.17",
  "futures-timer 3.0.2",
+ "libp2p 0.39.1",
  "log",
  "parity-scale-codec",
  "sp-core",

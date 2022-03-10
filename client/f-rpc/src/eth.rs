@@ -310,7 +310,11 @@ where
 		.map(|in_pool_tx| in_pool_tx.data().clone())
 		.collect::<Vec<<B as BlockT>::Extrinsic>>();
 	// Manually initialize the overlay.
-	let header = client.header(best).unwrap().unwrap();
+
+	let header = client.header(best)
+		.map_err(|e|internal_err(format!("Get chain header failed: {}", e)))?
+		.ok_or(internal_err(format!("No expect header: {}", best)))?;
+	// let header = client.header(best).unwrap().unwrap();
 	api.initialize_block(&best, &header)
 		.map_err(|e| internal_err(format!("Runtime api access error: {:?}", e)))?;
 	// Apply the ready queue to the best block's state.
@@ -2255,11 +2259,23 @@ where
 			self.backend.as_ref(),
 			Some(newest_block),
 		) {
-			let header = self.client.header(id).unwrap().unwrap();
+
+			let header = self.client.header(id)
+				.map_err(|e|internal_err(format!("Get chain header failed: {}", e)))?
+				.ok_or(internal_err(format!("No expect header: {}", id)))?;
 			// Highest and lowest block number within the requested range.
+			let block_number = self.client.number(header.hash())
+				.map_err(|e|internal_err(format!("Get block number failed: {}", e)))?
+				.ok_or(internal_err(format!("Get block nubmer failed")))?;
 			let highest = UniqueSaturatedInto::<u64>::unique_saturated_into(
-				self.client.number(header.hash()).unwrap().unwrap(),
+				block_number,
 			);
+
+			// let header = self.client.header(id).unwrap().unwrap();
+			// let highest = UniqueSaturatedInto::<u64>::unique_saturated_into(
+			// 	self.client.number(header.hash()).unwrap().unwrap(),
+			// );
+
 			let lowest = highest.saturating_sub(block_count);
 			// Tip of the chain.
 			let best_number =
@@ -2868,8 +2884,12 @@ where
 					for change in storage {
 						if let Some(data) = change {
 							// Decode the wrapped blob which's type is known.
-							let new_schema: EthereumStorageSchema =
-								Decode::decode(&mut &data.0[..]).unwrap();
+							let new_schema: EthereumStorageSchema = match Decode::decode(&mut &data.0[..]){
+								Ok(x) => x,
+								Err(_) => continue,
+							};
+							// let new_schema: EthereumStorageSchema =
+							// 	Decode::decode(&mut &data.0[..]).unwrap();
 							// Cache new entry and overwrite the old database value.
 							if let Ok(Some(old_cache)) =
 								frontier_backend_client::load_cached_schema::<B>(backend.as_ref())

@@ -334,7 +334,8 @@ impl FilteredParams {
 		Some(out)
 	}
 
-	pub fn filter_block_range(&self, block_number: u64) -> bool {
+	// origin code, should not use unwrap()
+	pub fn filter_block_range_v1(&self, block_number: u64) -> bool {
 		let mut out = true;
 		let filter = self.filter.clone().unwrap();
 		if let Some(from) = filter.from_block {
@@ -363,7 +364,38 @@ impl FilteredParams {
 		out
 	}
 
-	pub fn filter_block_hash(&self, block_hash: H256) -> bool {
+	pub fn filter_block_range(&self, block_number: u64) -> bool {
+		let mut out = true;
+		if let Some(filter) = self.filter.as_ref(){
+			if let Some(from) = filter.from_block{
+				match from {
+					BlockNumber::Num(_) => {
+						if from.to_min_block_num().unwrap_or(0 as u64) > block_number {
+							out = false;
+						}
+					}
+					_ => {}
+				}
+			}
+			if let Some(to) = filter.to_block{
+				match to {
+					BlockNumber::Num(_) => {
+						if to.to_min_block_num().unwrap_or(0 as u64) < block_number {
+							out = false;
+						}
+					}
+					BlockNumber::Earliest => {
+						out = false;
+					}
+					_ => {}
+				}
+			}
+		}
+		out
+	}
+
+	// origin code, should not use unwrap()
+	pub fn filter_block_hash_v1(&self, block_hash: H256) -> bool {
 		if let Some(h) = self.filter.clone().unwrap().block_hash {
 			if h != block_hash {
 				return false;
@@ -372,7 +404,19 @@ impl FilteredParams {
 		true
 	}
 
-	pub fn filter_address(&self, log: &Log) -> bool {
+	pub fn filter_block_hash(&self, block_hash: H256) -> bool {
+		if let Some(filter) = self.filter.as_ref(){
+			if let Some(h) = filter.block_hash{
+				if h != block_hash {
+					return false;
+				}
+			}
+		}
+		true
+	}
+
+	// origin code, should not use unwrap()
+	pub fn filter_address_v1(&self, log: &Log) -> bool {
 		if let Some(input_address) = &self.filter.clone().unwrap().address {
 			match input_address {
 				VariadicValue::Single(x) => {
@@ -387,6 +431,29 @@ impl FilteredParams {
 				}
 				_ => {
 					return true;
+				}
+			}
+		}
+		true
+	}
+
+	pub fn filter_address(&self, log: &Log) -> bool {
+		if let Some(filter) = self.filter.as_ref(){
+			if let Some(input_address) = &filter.address{
+				match input_address{
+					VariadicValue::Single(x) => {
+						if log.address != *x {
+							return false;
+						}
+					}
+					VariadicValue::Multiple(x) => {
+						if !x.contains(&log.address) {
+							return false;
+						}
+					}
+					_ => {
+						return true;
+					}
 				}
 			}
 		}

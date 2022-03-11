@@ -2613,7 +2613,8 @@ where
 				match &pool_item.filter_type {
 					// For each block created since last poll, get a vector of ethereum hashes.
 					FilterType::Block => {
-						let last = pool_item.last_poll.to_min_block_num().unwrap();
+						let last = pool_item.last_poll.to_min_block_num().unwrap_or(0 as u64);
+						// let last = pool_item.last_poll.to_min_block_num().unwrap();
 						let next = block_number + 1;
 						// Update filter `last_poll`.
 						locked.insert(
@@ -2656,7 +2657,8 @@ where
 						let last_poll = pool_item
 							.last_poll
 							.to_min_block_num()
-							.unwrap()
+							// .unwrap()
+							.unwrap_or(0 as u64)
 							.unique_saturated_into();
 
 						let filter_from = filter

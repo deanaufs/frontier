@@ -15,14 +15,14 @@ use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sp_runtime::traits::{Block as BlockT};
 use std::{
 	borrow::Cow,
-	collections::{HashMap, hash_map::Entry},
+	collections::{HashMap},
 	iter,
 	num::NonZeroUsize,
 	pin::Pin,
 	sync::{
 		Arc,
 	},
-	time::{SystemTime, Duration},
+	time::{Duration},
 };
 
 use sp_consensus::{VoteData, VoteElectionRequest, ElectionData};
@@ -366,8 +366,16 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 		}
 	}
 
+	fn propagate_election(&mut self, election_data: ElectionData<B>){
+		self.do_propagate_election(election_data, true);
+	}
+
+	fn propagate_vote(&mut self, vote_data: VoteData<B>){
+		self.do_propagate_vote(vote_data, true);
+	}
+
 	fn propagate_vote_and_election(&mut self){
-		let pending_elections = {
+		let propagate_elections = {
 			let propagate_count = MAX_PENDINGS/2;
 			if self.pending_elections.len() < propagate_count {
 				self.pending_elections.clone()
@@ -378,11 +386,11 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 			}
 		};
 
-		for election_data in pending_elections.iter(){
-			self.propagate_election(election_data.clone());
+		for election_data in propagate_elections.iter(){
+			self.do_propagate_election(election_data.clone(), false);
 		}
 
-		let pending_votes = {
+		let propagate_votes = {
 			let propagate_count = MAX_PENDINGS/2;
 			if self.pending_votes.len() < propagate_count {
 				self.pending_votes.clone()
@@ -393,26 +401,26 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 			}
 		};
 
-		for vote_data in pending_votes.iter(){
-			self.propagate_vote(vote_data.clone());
+		for vote_data in propagate_votes.iter(){
+			self.do_propagate_vote(vote_data.clone(), false);
 		}
 	}
 
-	fn propagate_election(&mut self, election_data: ElectionData<B>){
+	fn do_propagate_election(&mut self, election_data: ElectionData<B>, to_self: bool){
 		let mut propagated_numbers = 0;
 		// let hash = election_data.hash.clone();
 		let election_hash = hash_of(&election_data);
-		let election_block_hash = election_data.block_hash.clone();
+		// let election_block_hash = election_data.block_hash.clone();
 		let to_send = VoteElectionNotification::Election(election_data).encode();
 
-		let (mut known_count ,mut unknown_count) = (0, 0);
+		// let (mut known_count ,mut unknown_count) = (0, 0);
 		for (who, peer) in self.peers.iter_mut() {
 			if matches!(peer.role, ObservedRole::Light) {
 				continue;
 			}
 
 			if peer.known_elections.insert(election_hash){
-				unknown_count += 1;
+				// unknown_count += 1;
 				propagated_numbers += 1;
 
 				// log::info!(">>>> Election {:?}, client/network/src/producer_select.rs: 540", who);
@@ -423,7 +431,7 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 				);
 			}
 			else{
-				known_count += 1;
+				// known_count += 1;
 				// log::info!("ignore node: {:?}, already known this election", who);
 			}
 		}
@@ -437,13 +445,15 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 		// }
 
 		// log::info!(">>>> Election to local_peer_id: client/network/src/producer_select.rs: 548");
-		let local_peer_id = self.service.local_peer_id();
-		let _ = self.local_event_tx.unbounded_send(
-			Event::NotificationsReceived{
-				remote: local_peer_id.clone(), 
-				messages: vec![(self.protocol_name.clone(), Bytes::from(to_send.clone()))],
-			}
-		);
+		if to_self{
+			let local_peer_id = self.service.local_peer_id();
+			let _ = self.local_event_tx.unbounded_send(
+				Event::NotificationsReceived{
+					remote: local_peer_id.clone(), 
+					messages: vec![(self.protocol_name.clone(), Bytes::from(to_send.clone()))],
+				}
+			);
+		}
 
 		// log::info!("♓ Propagate election({}) to {} peers", hash, propagated_numbers);
 		if let Some(ref metriecs) = self.metrics {
@@ -451,16 +461,16 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 		}
 	}
 
-	fn propagate_vote(&mut self, vote_data: VoteData<B>){
+	fn do_propagate_vote(&mut self, vote_data: VoteData<B>, to_self: bool){
 		// log::info!("{:?}", vote_data);
 		let mut propagated_numbers = 0;
 		// let hash = vote_data.hash.clone();
 
 		let vote_hash = hash_of(&vote_data);
-		let vote_block_hash = vote_data.block_hash.clone();
+		// let vote_block_hash = vote_data.block_hash.clone();
 		let to_send = VoteElectionNotification::Vote(vote_data).encode();
 
-		let (mut known_count ,mut unknown_count) = (0, 0);
+		// let (mut known_count ,mut unknown_count) = (0, 0);
 		for (who, peer) in self.peers.iter_mut() {
 			if matches!(peer.role, ObservedRole::Light) {
 				continue;
@@ -475,10 +485,10 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 					self.protocol_name.clone(),
 					to_send.clone(),
 				);
-				unknown_count += 1;
+				// unknown_count += 1;
 			}
 			else{
-				known_count += 1;
+				// known_count += 1;
 			}
 		}
 		// log::info!("propagate vote result: {} {}/{}", vote_hash, unknown_count, known_count + unknown_count);
@@ -492,16 +502,17 @@ impl<B: BlockT + 'static, H: ExHashT> VoteElectionHandler<B, H> {
 		// }
 
 		// log::info!(">>>> to local_peer_id: client/network/src/producer_select.rs:522");
-		let local_peer_id = self.service.local_peer_id();
-		let _ = self.local_event_tx.unbounded_send(
-			Event::NotificationsReceived{
-				remote: local_peer_id.clone(), 
-				messages: vec![(self.protocol_name.clone(), Bytes::from(to_send.clone()))],
-			}
-		);
+		if to_self{
+			let local_peer_id = self.service.local_peer_id();
+			let _ = self.local_event_tx.unbounded_send(
+				Event::NotificationsReceived{
+					remote: local_peer_id.clone(), 
+					messages: vec![(self.protocol_name.clone(), Bytes::from(to_send.clone()))],
+				}
+			);
+		}
 
 		// ::info!("♓ Propagate vote ({}) to {} peers", hash, propagated_numbers);
-
 		if let Some(ref metriecs) = self.metrics {
 			metriecs.propagated_numbers.inc_by(propagated_numbers as _)
 		}

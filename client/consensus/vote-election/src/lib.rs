@@ -84,7 +84,10 @@ use sp_consensus::{
 	VoteData, ElectionData, VoteElectionRequest,
 };
 use sp_consensus_slots::Slot;
-use sp_core::crypto::{Pair, Public};
+use sp_core::{
+	crypto::{Pair, Public},
+	hexdisplay::HexDisplay,
+};
 use sp_inherents::CreateInherentDataProviders;
 
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr, vrf::VRFSignature};
@@ -1076,7 +1079,18 @@ where
 		}
 
 		rank_vec.sort();
-		log::info!("{:?}, election result", rank_vec);
+		if let Some(election) = election_vec.last(){
+			// let pub_keys = election.committee_pub_bytes;
+			log::info!(
+				"{:?}, election result,  #0x{}", 
+				rank_vec,
+				HexDisplay::from(&election.committee_pub_bytes)
+			);
+		}
+		else{
+			log::info!("{:?}, election result", rank_vec);
+		}
+		// log::info!("0x{}", HexDisplay::from(committee_pub_bytes));
 		// let weight = caculate_weight_from_ranks(&rank_vec, MAX_VOTE_RANK);
 
 		let weight = caculate_weight_from_elections(&pub_bytes, &election_vec, committee_count);

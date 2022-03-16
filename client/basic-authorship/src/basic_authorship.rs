@@ -378,12 +378,12 @@ where
 
 			let block_size =
 				block_builder.estimate_block_size(self.include_proof_in_block_size_estimation);
-			log::info!(
-				"tx size: {} #({:?}, {:?})",
-				pending_tx_data.encoded_size(),
-				BlakeTwo256::hash_of(&pending_tx_data),
-				pending_tx_hash,
-			);
+			// log::info!(
+			// 	"tx size: {} #({:?}, {:?})",
+			// 	pending_tx_data.encoded_size(),
+			// 	BlakeTwo256::hash_of(&pending_tx_data),
+			// 	pending_tx_hash,
+			// );
 			if block_size + pending_tx_data.encoded_size() > block_size_limit {
 				if skipped < MAX_SKIPPED_TRANSACTIONS {
 					skipped += 1;
@@ -463,7 +463,7 @@ where
 			// 	.join(", ")
 		);
 		log::info!(
-			"extrincisc ({}): [{}]",
+			"☃ extrincisc ({}): [{}]",
 			block.extrinsics().len(),
 			block.extrinsics()
 				.iter()

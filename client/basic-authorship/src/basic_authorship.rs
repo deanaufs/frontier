@@ -378,6 +378,12 @@ where
 
 			let block_size =
 				block_builder.estimate_block_size(self.include_proof_in_block_size_estimation);
+			log::info!(
+				"tx size: {} #({:?}, {:?})",
+				pending_tx_data.encoded_size(),
+				BlakeTwo256::hash_of(&pending_tx_data),
+				pending_tx_hash,
+			);
 			if block_size + pending_tx_data.encoded_size() > block_size_limit {
 				if skipped < MAX_SKIPPED_TRANSACTIONS {
 					skipped += 1;
@@ -443,14 +449,26 @@ where
 		});
 
 		info!(
-			"🎁 Prepared block for proposing at {} [hash: {}; parent_hash: {}; extrinsics ({}): [{}]]",
+			"🎁 Prepared block for proposing at {} [hash: {}; parent_hash: {};",
+			// "🎁 Prepared block for proposing at {} [hash: {}; parent_hash: {}; extrinsics ({}): [{}]",
 			block.header().number(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
+			// block.extrinsics().len(),
+			// block.extrinsics()
+			// 	.iter()
+			// 	.map(|xt| format!("{}({})", BlakeTwo256::hash_of(xt), xt.encoded_size()))
+			// 	// .map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
+			// 	.collect::<Vec<_>>()
+			// 	.join(", ")
+		);
+		log::info!(
+			"extrincisc ({}): [{}]",
 			block.extrinsics().len(),
 			block.extrinsics()
 				.iter()
-				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
+				.map(|xt| format!("{}({})", BlakeTwo256::hash_of(xt), xt.encoded_size()))
+				// .map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
 				.collect::<Vec<_>>()
 				.join(", ")
 		);

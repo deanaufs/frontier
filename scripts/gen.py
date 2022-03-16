@@ -7,12 +7,12 @@ ipv4 = "0.0.0.0"
 public_ip = "221.121.151.89"
 boot_peer_id="12D3KooWJTKdM3TkwGEjHcfEuWMHqAa9BjnmZJHX2mnCH4N35xaA"
 
-boot_node_str = """# 启动节点C01
-./target/debug/{0} purge-chain --base-path ./tmp/C01 --chain local -y;\\
+boot_node_str = """# 启动节点{5}
+./target/debug/{0} purge-chain --base-path ./tmp/{5} --chain local -y;\\
 ./target/debug/{0} \\
-    --base-path ./tmp/C01 \\
+    --base-path ./tmp/{5} \\
     --chain $spec_file \\
-    --public-addr /ip4/{1}/tcp/{2}\\
+    --public-addr /ip4/{1}/tcp/{2} \\
     --port {2} \\
     --ws-port {3} \\
     --rpc-port {4} \\
@@ -20,16 +20,16 @@ boot_node_str = """# 启动节点C01
     --rpc-cors all \\
     --unsafe-rpc-external \\
     --telemetry-url 'wss://telemetry.polkadot.io/submit/ 0' \\
-    --name C01 &>./tmp/C01.log &\\
+    --name {5} &>./tmp/{5}.log &\\
 sleep 0.1s
-""".format(app_name, public_ip, PORT, WS_PORT, RPC_PORT)
+""".format(app_name, public_ip, PORT, WS_PORT, RPC_PORT, "C01")
 
 committee_node_str = """#启动节点{0}
 ./target/debug/{1} purge-chain --base-path ./tmp/{0} --chain local -y;\\
 ./target/debug/{1} \\
     --base-path ./tmp/{0} \\
     --chain $spec_file \\
-    --public-addr /ip4/{5}/tcp/{2}\\
+    --public-addr /ip4/{5}/tcp/{2} \\
     --port {2} \\
     --ws-port {3} \\
     --rpc-port {4} \\
@@ -44,7 +44,7 @@ author_node_str = """#启动节点{0}
 ./target/debug/{1} purge-chain --base-path ./tmp/{0} --chain local -y;\\
 ./target/debug/{1} \\
     --base-path ./tmp/{0} \\
-    --public-addr /ip4/{5}/tcp/{2}\\
+    --public-addr /ip4/{5}/tcp/{2} \\
     --chain $spec_file \\
     --port {2} \\
     --ws-port {3} \\

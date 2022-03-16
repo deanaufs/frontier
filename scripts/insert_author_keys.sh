@@ -1,4 +1,4 @@
-spec_file="./tmp/RawAuraSpec.json"
+spec_file="./tmp/RawSpec.json"
 
 # 节点1
 # 将aura key添加到对应节点里面

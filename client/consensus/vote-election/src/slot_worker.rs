@@ -1277,7 +1277,7 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 										// log::info!("{}:{:?}", i, v);
 										// log::info!("--Committee send back: ({:?}, {:?}) {}", v.sig_bytes[0..2], v.pub_bytes[0..2], cur_hash);
 										// log::info!("--Committee send: ({:?}), {}", v.pub_bytes, cur_hash);
-										log::info!("Committee.S1, pre send vrf: 0x{:0>32X}", k);
+										// log::info!("Committee.S1, pre send vrf: 0x{:0>32X}", k);
 										election_result.push(v.clone());
 									}
 

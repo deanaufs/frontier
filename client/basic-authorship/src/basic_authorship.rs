@@ -55,7 +55,8 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 /// Be aware that there is also an upper packet size on what the networking code
 /// will accept. If the block doesn't fit in such a package, it can not be
 /// transferred to other nodes.
-pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
+pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 500 * 10 * 200 + 512;
+// pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
 
 /// [`Proposer`] factory.
 pub struct ProposerFactory<A, B, C, PR> {

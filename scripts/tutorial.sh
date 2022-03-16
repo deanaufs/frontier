@@ -1,12 +1,29 @@
-# 生成默认的配置模板
-./target/debug/node-template build-spec --disable-default-bootnode --chain local > ./tmp/AuraSpec.json
+# 配置git账号
+git config --global user.name
+git config --global user.email
+# 生成rsa秘钥
+ssh-keygen -o
+# 将生成的秘钥添加到gitee管理秘钥里面
+$ cat ~/.ssh/id_rsa.pub
 
-# 根据模板，修改customSpec.json的aura, grandp内容，
+# 安装rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# 安装c-lang，nightly, wasm32
+sudo apt-get install c-lang，nightly
+rust update nightly
+rustup target add wasm32-unknown-unknown --toolchain nighlty
 
-# 产生启动时可用的Raw配置文件
-./target/debug/node-template build-spec --chain=./tmp/AuraSpec.json --raw --disable-default-bootnode > ./tmp/RawAuraSpec.json
+# # 生成默认的配置模板
+# ./target/debug/node-template build-spec --disable-default-bootnode --chain local > ./tmp/Spec.json
+# # 根据模板，修改customSpec.json的aura, grandp内容，
+# python3 scripts/replace_spec_author.py ./tmp/Spec.json ./tmp/TempSpec.json
+# # 产生启动时可用的Raw配置文件
+# ./target/debug/node-template build-spec --chain=./tmp/TempSpec.json --raw --disable-default-bootnode > ./tmp/RawSpec.json
 
-# 单独启动流程
+# 生成RawSpec.json文件
+./scripts/gen_raw_spec.sh
+
+# 单独启动流程k
 
 # 启动节点1
 # 按照生成的Raw配置文件启动node-template

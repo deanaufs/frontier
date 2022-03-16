@@ -173,52 +173,64 @@ fn testnet_genesis(
 		evm: EVMConfig {
 			accounts: {
 				let mut map = BTreeMap::new();
-				map.insert(
-					// H160 address of Alice dev account
-					// Derived from SS58 (42 prefix) address
-					// SS58: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
-					// hex: 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
-					// Using the full hex key, truncating to the first 20 bytes (the first 40 hex chars)
-					H160::from_str("d43593c715fdd31c61141abd04a99fd6822c8558")
-						.expect("internal H160 is valid; qed"),
-					pallet_evm::GenesisAccount {
-						balance: U256::from_str("0xffffffffffffffffffffffffffffffff")
-							.expect("internal U256 is valid; qed"),
-						code: Default::default(),
-						nonce: Default::default(),
-						storage: Default::default(),
-					},
-				);
-				map.insert(
-					// H160 address of CI test runner account
-					H160::from_str("6be02d1d3665660d22ff9624b7be0551ee1ac91b")
-						.expect("internal H160 is valid; qed"),
-					pallet_evm::GenesisAccount {
-						balance: U256::from_str("0xffffffffffffffffffffffffffffffff")
-							.expect("internal U256 is valid; qed"),
-						code: Default::default(),
-						nonce: Default::default(),
-						storage: Default::default(),
-					},
-				);
-				map.insert(
-					// H160 address of CI test runner account
-					H160::from_str("4718b814eF23Fa23318E49C2Ee395931F41AEBEB")
-						.expect("internal H160 is valid; qed"),
-					pallet_evm::GenesisAccount {
-						balance: U256::from_str("0xffffffffffffffffffffffffffffffff")
-							.expect("internal U256 is valid; qed"),
-						code: Default::default(),
-						nonce: Default::default(),
-						storage: Default::default(),
-					},
-				);
+				// map.insert(
+				// 	// H160 address of Alice dev account
+				// 	// Derived from SS58 (42 prefix) address
+				// 	// SS58: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+				// 	// hex: 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+				// 	// Using the full hex key, truncating to the first 20 bytes (the first 40 hex chars)
+				// 	H160::from_str("d43593c715fdd31c61141abd04a99fd6822c8558")
+				// 		.expect("internal H160 is valid; qed"),
+				// 	pallet_evm::GenesisAccount {
+				// 		balance: U256::from_str("0xffffffffffffffffffffffffffffffff")
+				// 			.expect("internal U256 is valid; qed"),
+				// 		code: Default::default(),
+				// 		nonce: Default::default(),
+				// 		storage: Default::default(),
+				// 	},
+				// );
+				// map.insert(
+				// 	// H160 address of CI test runner account
+				// 	H160::from_str("6be02d1d3665660d22ff9624b7be0551ee1ac91b")
+				// 		.expect("internal H160 is valid; qed"),
+				// 	pallet_evm::GenesisAccount {
+				// 		balance: U256::from_str("0xffffffffffffffffffffffffffffffff")
+				// 			.expect("internal U256 is valid; qed"),
+				// 		code: Default::default(),
+				// 		nonce: Default::default(),
+				// 		storage: Default::default(),
+				// 	},
+				// );
+				// map.insert(
+				// 	// H160 address of CI test runner account
+				// 	H160::from_str("4718b814eF23Fa23318E49C2Ee395931F41AEBEB")
+				// 		.expect("internal H160 is valid; qed"),
+				// 	pallet_evm::GenesisAccount {
+				// 		balance: U256::from_str("0xffffffffffffffffffffffffffffffff")
+				// 			.expect("internal U256 is valid; qed"),
+				// 		code: Default::default(),
+				// 		nonce: Default::default(),
+				// 		storage: Default::default(),
+				// 	},
+				// );
 				map.insert(
 					// H160 address of CI test runner account
 					H160::from_str("3637CCeE721E0b3D9e3712C4c5DcDbC20b232bCE")
 						.expect("internal H160 is valid; qed"),
 					pallet_evm::GenesisAccount {
-						balance: U256::from_str("0xffffffffffffffffffffffffffffffff")
+						balance: U256::from_str("0x52b7d2dcc80cd2e4000000")
+							.expect("internal U256 is valid; qed"),
+						code: Default::default(),
+						nonce: Default::default(),
+						storage: Default::default(),
+					},
+				);
+				map.insert(
+					// H160 address of CI test runner account
+					H160::from_str("B5C07593B54d9CB07bC48FbB6f580ccD065Ae942")
+						.expect("internal H160 is valid; qed"),
+					pallet_evm::GenesisAccount {
+						balance: U256::from_str("0x52b7d2dcc80cd2e4000000")
 							.expect("internal U256 is valid; qed"),
 						code: Default::default(),
 						nonce: Default::default(),

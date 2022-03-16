@@ -11,13 +11,13 @@ use fc_rpc_core::types::{FeeHistoryCache, FilterPool};
 use frontier_template_runtime::{self, opaque::Block, RuntimeApi, SLOT_DURATION};
 use futures::StreamExt;
 use sc_cli::SubstrateCli;
-use sc_client_api::{BlockchainEvents, ExecutorProvider, RemoteBackend};
+use sc_client_api::{BlockchainEvents, ExecutorProvider};
 use sc_consensus_vote_election::{ImportQueueParams, SlotProportion, StartAuraParams};
 // use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 // #[cfg(feature = "manual-seal")]
 // use sc_consensus_manual_seal::{self as manual_seal};
 pub use sc_executor::NativeElseWasmExecutor;
-use sc_finality_grandpa::SharedVoterState;
+// use sc_finality_grandpa::SharedVoterState;
 use sc_keystore::LocalKeystore;
 use sc_network::warp_request_handler::WarpSyncProvider;
 use sc_service::{error::Error as ServiceError, BasePath, Configuration, TaskManager};
@@ -440,7 +440,7 @@ pub fn new_full(mut config: Configuration, cli: &Cli) -> Result<TaskManager, Ser
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let backoff_authoring_blocks: Option<()> = None;
-	let name = config.network.node_name.clone();
+	let _name = config.network.node_name.clone();
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 	let is_authority = config.role.is_authority();
@@ -547,7 +547,7 @@ pub fn new_full(mut config: Configuration, cli: &Cli) -> Result<TaskManager, Ser
 		EthTask::ethereum_schema_cache_task(Arc::clone(&client), Arc::clone(&frontier_backend)),
 	);
 
-	let (block_import, grandpa_link) = consensus_result;
+	let (block_import, _grandpa_link) = consensus_result;
 
 	// author worker
 	if !role.is_light() {
@@ -955,7 +955,7 @@ pub fn new_full(mut config: Configuration, cli: &Cli) -> Result<TaskManager, Ser
 
 #[cfg(feature = "aura")]
 /// Builds a new service for a light client.
-pub fn new_light(mut config: Configuration) -> Result<TaskManager, ServiceError> {
+pub fn new_light(_config: Configuration) -> Result<TaskManager, ServiceError> {
 	// let telemetry = config
 	// 	.telemetry_endpoints
 	// 	.clone()

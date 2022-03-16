@@ -515,6 +515,14 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let base_fee = T::FeeCalculator::min_gas_price();
+		// let block_gas_limit = T::BlockGasLimit::get();
+		// log::info!("min_gas_price: {}, block_gas_limit: {}", base_fee, T::BlockGasLimit::get());
+		// log::info!(
+		// 	"min_gas_price: {}, block_count: {}, max_fee: {:?}",
+		// 	base_fee,
+		// 	block_gas_limit/base_fee,
+		// 	transaction_data.max_fee_per_gas,
+		// );
 		let mut priority = 0;
 
 		let gas_price = if let Some(gas_price) = transaction_data.gas_price {

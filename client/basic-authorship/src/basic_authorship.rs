@@ -463,7 +463,8 @@ where
 			// 	.join(", ")
 		);
 		log::info!(
-			"☃ extrincisc ({}): [{}]",
+			"☃ #{} extrinsics ({}): [{}]",
+			block.header().number(),
 			block.extrinsics().len(),
 			block.extrinsics()
 				.iter()

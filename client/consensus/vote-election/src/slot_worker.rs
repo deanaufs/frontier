@@ -853,7 +853,7 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 							Ok(v)=>v.weight,
 							Err(e) => {
 								log::warn!(
-									"Committee.S1, cacl block election weight error, {:?}, #{} ({})",
+									"Author.S1, cacl block election weight error, {:?}, #{} ({})",
 									e, cur_header.number(), cur_header.hash(),
 								);
 								state = AuthorState::WaitStart;
@@ -1312,7 +1312,7 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 										continue;
 									}
 
-									if block_weight_info.weight < min_election_weight {
+									if block_weight_info.weight <= min_election_weight {
 										log::info!("Committee.S1: recv block with 50% exceed, #{}({})", block.header.number(), block.hash);
 										state = CommitteeState::RecvVote(block.header);
 										break;

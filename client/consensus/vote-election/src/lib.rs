@@ -461,13 +461,15 @@ where
 							let finalize_hash = pre_finalize_vec.remove(0);
 
 							match client.finalize_block(BlockId::Hash(finalize_hash), None, true){
+								Ok(()) => {
+									let rest_block_str = pre_finalize_vec.iter().map(|b|format!("{}", b)).collect::<Vec<_>>().join(",");
+									log::info!("✅ Successfully finalized block: {}, {}", block.hash, rest_block_str);
+									// log::info!("✅ Successfully finalized block: {}", block.hash);
+									// rpc::send_result(&mut sender, Ok(()))
+								},
 								Err(e) => {
 									log::warn!("Failed to finalize block {:?}", e);
 									// rpc::send_result(&mut sender, Err(e.into()))
-								},
-								Ok(()) => {
-									log::info!("✅ Successfully finalized block: {}", block.hash);
-									// rpc::send_result(&mut sender, Ok(()))
 								},
 							}
 						}

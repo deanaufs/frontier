@@ -844,6 +844,26 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 					}
 				};
 
+				let cur_block_weight = {
+					if cur_header.number().is_zero(){
+						0u64
+					}
+					else{
+						let weight = match worker.caculate_weight_info_from_header(&cur_header){
+							Ok(v)=>v.weight,
+							Err(e) => {
+								log::warn!(
+									"Committee.S1, cacl block election weight error, {:?}, #{} ({})",
+									e, cur_header.number(), cur_header.hash(),
+								);
+								state = AuthorState::WaitStart;
+								continue;
+							},
+						};
+						weight
+					}
+				};
+
 				let mut cur_election_weight = max_election_weight;
 
 				loop{
@@ -869,7 +889,7 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 									break;
 								}
 
-								let new_block_election_info = match worker.caculate_weight_info_from_header(&block.header){
+								let import_block_election_info = match worker.caculate_weight_info_from_header(&block.header){
 									Ok(v)=>v,
 									Err(e) => {
 										log::info!("Author.S1, caculate block election weight error, {:?}, #{} ({})",
@@ -878,28 +898,74 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 										continue
 									},
 								};
+
 								// log::info!("Author.S1, block random: 0x{:0>32X} ({})", new_block_election_info.random, block.header.hash());
 
-								if new_block_election_info.weight <= min_election_weight {	// exceed 51%
+								if import_block_election_info.weight <= min_election_weight {	// exceed 51%
 									log::info!(
 										"Author.S1, block #{} ({}) from outside with exceed 50% election", 
 										block.header.number(),
 										block.hash
 									);
+
+									if *block.header.parent_hash() != cur_header.hash(){
+										log::warn!(
+											"Author.S1, AS1#01 need handle: #{}({}) is not the next block for current block #{}({})",
+											block.header.number(),
+											block.header.hash(),
+											cur_header.number(),
+											cur_header.hash(),
+										);
+									}
 									state = AuthorState::WaitProposal(block.header);
 									break;
 								}
 
+								// import block for next height
 								if block.header.parent_hash() == &cur_header.hash(){
-									if new_block_election_info.random < local_vrf_num {
+									if import_block_election_info.random < local_vrf_num {
 										log::info!(
-											"Author.S1, block #{} ({}) outside with smaller random",
+											"Author.S1, block #{}({}) outside with smaller random",
 											block.header.number(),
 											block.hash,
 										);
 										state = AuthorState::WaitProposal(block.header);
 										break;
 									}
+									else{
+										log::info!(
+											"Author.S1, ignore block because local vrf smaller, local: 0x{:0>32X} < 0x{:0>32X}",
+											local_vrf_num,
+											import_block_election_info.random,
+										);
+									}
+								}
+								// import block with same height
+								else if block.header.hash() == cur_header.hash(){
+									if import_block_election_info.weight < cur_block_weight{
+										log::info!("Author.S1: change to a block with less weight, #{}({})",
+											block.header.number(), block.hash) ;
+										state = AuthorState::WaitProposal(block.header);
+										break;
+									}
+									else{
+										log::info!(
+											"Author.S1: ignore block with larger weight, #{}({}), cur: {}, new: {}",
+											block.header.number(),
+											block.hash,
+											cur_block_weight,
+											import_block_election_info.weight,
+										);
+									}
+								}
+								else{
+									log::warn!(
+										"Author.S1, AS1#02 need handle: this situation: #{}({}), #{}({})",
+										block.header.number(),
+										block.header.hash(),
+										cur_header.number(),
+										cur_header.hash(),
+									);
 								}
 
 								log::info!(

@@ -1081,7 +1081,7 @@ where
 		rank_vec.sort();
 		if let Some(election) = election_vec.last(){
 			// let pub_keys = election.committee_pub_bytes;
-			log::debug!(
+			log::info!(
 				target: "vote",
 				// "{:?}, election result", 
 				// rank_vec,
@@ -1091,7 +1091,7 @@ where
 			);
 		}
 		else{
-			log::debug!( target: "vote", "{:?}, election result", rank_vec);
+			log::info!( target: "vote", "{:?}, election result", rank_vec);
 		}
 		// log::info!("0x{}", HexDisplay::from(committee_pub_bytes));
 		// let weight = caculate_weight_from_ranks(&rank_vec, MAX_VOTE_RANK);

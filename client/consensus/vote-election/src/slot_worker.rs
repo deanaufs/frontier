@@ -941,7 +941,8 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 									}
 								}
 								// import block with same height
-								else if block.header.hash() == cur_header.hash(){
+								else if block.header.parent_hash() == cur_header.parent_hash(){
+								// else if block.header.hash() == cur_header.hash(){
 									if import_block_election_info.weight < cur_block_weight{
 										log::info!("Author.S1: change to a block with less weight, #{}({})",
 											block.header.number(), block.hash) ;
@@ -960,11 +961,11 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 								}
 								else{
 									log::warn!(
-										"Author.S1, AS1#02 need handle: this situation: #{}({}), #{}({})",
-										block.header.number(),
-										block.header.hash(),
+										"Author.S1, AS1#02 need handle: this situation: cur: #{}({}), new: #{}({})",
 										cur_header.number(),
 										cur_header.hash(),
+										block.header.number(),
+										block.header.hash(),
 									);
 								}
 
@@ -1327,6 +1328,11 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 											break;
 										}
 									}
+									log::info!(
+										"Committee.S1: ignore block: #{}({})",
+										block.header.number(),
+										block.header.hash()
+									);
 
 									// else{
 									// 	continue;

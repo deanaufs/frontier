@@ -544,12 +544,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		// deadline our production to 98% of the total time left for proposing. As we deadline
 		// the proposing below to the same total time left, the 2% margin should be enough for
 		// the result to be returned.
+		// log::info!("slot_worker, remaining duration: {}ms", proposing_remaining_duration.as_millis());
 		let proposing = proposer
 			.propose(
 				slot_info.inherent_data,
 				sp_runtime::generic::Digest { logs },
 				// proposing_remaining_duration.mul_f32(0.98),
-				Duration::from_millis(1000),
+				Duration::from_millis(6000),
 				None,
 			)
 			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
@@ -1274,7 +1275,7 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 					}
 				};
 
-				let recv_duration = Duration::from_secs(COMMITTEE_TIMEOUT);
+				let recv_duration = Duration::from_secs(COMMITTEE_TIMEOUT-2);
 				let full_timeout_duration = recv_duration;
 				let start_time = SystemTime::now();
 
@@ -1361,6 +1362,7 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 									log::info!("Committee.S1: no vote for hash: #{}({})", cur_header.number(), cur_hash);
 								}
 							}
+							Delay::new(Duration::from_millis(2000)).await;
 							state = CommitteeState::WaitStart;
 							break;
 						},

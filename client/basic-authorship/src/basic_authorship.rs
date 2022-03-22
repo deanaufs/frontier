@@ -273,6 +273,7 @@ where
 			"basic-authorship-proposer",
 			Box::pin(async move {
 				// leave some time for evaluation and block finalization (33%)
+				// log::info!("basic_authorship, propose duration: {}ms", (max_duration-max_duration/3).as_millis());
 				let deadline = (self.now)() + max_duration - max_duration / 3;
 				let res = self
 					.propose_with(inherent_data, inherent_digests, deadline, block_size_limit)
@@ -364,9 +365,15 @@ where
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
 
+		// log::info!("Propose time: now: {:?}, deadline: {:?}", (self.now)(), deadline);
+		let start_time = (self.now)();
+		// let (mut push_count, total_count) = (0, pending_iterator);
+		let mut push_count = 0;
 		for pending_tx in pending_iterator {
+			push_count += 1;
 			if (self.now)() > deadline {
-				debug!(
+				log::info!(
+				// debug!(
 					"Consensus deadline reached when pushing block transactions, \
 					proceeding with proposing."
 				);
@@ -431,6 +438,16 @@ where
 				},
 			}
 		}
+
+		// if let Some(d) = start_time.elapsed(){
+		// 	log::info!("basic_authorship: block build spend: {}ms", d.as_millis());
+		// }
+		let d= start_time.elapsed();
+		log::info!(
+			"basic_authorship: block build spend: {}ms, {}tx",
+			d.as_millis(),
+			push_count,
+		);
 
 		if hit_block_size_limit && !transaction_pushed {
 			warn!(

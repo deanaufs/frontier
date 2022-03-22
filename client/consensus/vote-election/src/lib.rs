@@ -460,11 +460,9 @@ where
 						while pre_finalize_vec.len() > 3{
 							let finalize_hash = pre_finalize_vec.remove(0);
 
-							match client.finalize_block(BlockId::Hash(finalize_hash), None, true){
+							match client.finalize_block(BlockId::Hash(finalize_hash.clone()), None, true){
 								Ok(()) => {
-									let rest_block_str = pre_finalize_vec.iter().map(|b|format!("{}", b)).collect::<Vec<_>>().join(",");
-									log::info!("✅ Successfully finalized block: {}, {}", block.hash, rest_block_str);
-									// log::info!("✅ Successfully finalized block: {}", block.hash);
+									log::info!("✅ Successfully finalized block: {}", finalize_hash);
 									// rpc::send_result(&mut sender, Ok(()))
 								},
 								Err(e) => {
@@ -1083,13 +1081,16 @@ where
 		rank_vec.sort();
 		if let Some(election) = election_vec.last(){
 			// let pub_keys = election.committee_pub_bytes;
+			let account_str = format!("{}", HexDisplay::from(&election.committee_pub_bytes));
 			log::info!(
 				target: "vote",
 				// "{:?}, election result", 
 				// rank_vec,
-				"{:?}, election result,  #0x{}", 
+				"{:?}, election result,  #0x{}...{}", 
 				rank_vec,
-				HexDisplay::from(&election.committee_pub_bytes)
+				// HexDisplay::from(&election.committee_pub_bytes)
+				&account_str[0..4],
+				&account_str[60..],
 			);
 		}
 		else{

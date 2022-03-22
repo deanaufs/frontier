@@ -548,7 +548,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			.propose(
 				slot_info.inherent_data,
 				sp_runtime::generic::Digest { logs },
-				proposing_remaining_duration.mul_f32(0.98),
+				// proposing_remaining_duration.mul_f32(0.98),
+				Duration::from_millis(1000),
 				None,
 			)
 			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));

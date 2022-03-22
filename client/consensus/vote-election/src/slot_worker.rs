@@ -34,7 +34,7 @@ use crate::{slots::Slots, MAX_VOTE_RANK, COMMITTEE_TIMEOUT};
 use codec::{Decode, Encode};
 
 // use rand::Rng;
-use futures::{Future, TryFutureExt, channel::mpsc, FutureExt};
+use futures::{Future, TryFutureExt, channel::mpsc, FutureExt, future::Either};
 use futures::StreamExt;
 
 use futures_timer::Delay;
@@ -453,7 +453,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let telemetry = self.telemetry();
 		let logging_target = self.logging_target();
 
-		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
+		// let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
+		let proposing_remaining_duration = Duration::from_millis(6000);
+		let proposing_remaining = Delay::new(proposing_remaining_duration.clone());
 
 		let epoch_data = match self.epoch_data(&parent_header, slot) {
 			Ok(epoch_data) => epoch_data,
@@ -549,19 +551,49 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			.propose(
 				slot_info.inherent_data,
 				sp_runtime::generic::Digest { logs },
-				// proposing_remaining_duration.mul_f32(0.98),
-				Duration::from_millis(6000),
+				proposing_remaining_duration.mul_f32(0.98),
+				// Duration::from_millis(5000),
 				None,
 			)
 			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
 
-		let proposal = match proposing.await{
-			Ok(p) => p,
-			Err(err) => {
-				warn!(target: logging_target, "Proposing failed: {:?}", err);
-				return None;
-			}
+		let import_delay = Delay::new(proposing_remaining_duration.mul_f32(0.98));
+		let proposal = match futures::future::select(proposing, proposing_remaining).await {
+			Either::Left((Ok(p), _)) => p,
+			Either::Left((Err(err), _)) => {
+				warn!("Proposing failed: {:?}", err);
+
+				return None
+			},
+			Either::Right(_) => {
+				info!(
+					target: logging_target,
+					"⌛️ Discarding proposal for slot {}; block production took too long", slot,
+				);
+				// If the node was compiled with debug, tell the user to use release optimizations.
+				#[cfg(build_type = "debug")]
+				info!(
+					"👉 Recompile your node in `--release` mode to mitigate this problem.",
+				);
+				// telemetry!(
+				// 	telemetry;
+				// 	CONSENSUS_INFO;
+				// 	"slots.discarding_proposal_took_too_long";
+				// 	"slot" => *slot,
+				// );
+
+				return None
+			},
 		};
+		import_delay.await;
+
+		// let proposal = match proposing.await{
+		// 	Ok(p) => p,
+		// 	Err(err) => {
+		// 		warn!(target: logging_target, "Proposing failed: {:?}", err);
+		// 		return None;
+		// 	}
+		// };
 
 		let (block, storage_proof) = (proposal.block, proposal.proof);
 		let (header, body) = block.deconstruct();
@@ -878,9 +910,9 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 					}
 					
 					let timeout = Delay::new(rest_timeout_duration);
-					// if election_vec.len()==4{
-					// 	log::info!("Author.S1, timeout: {:?}, rest_rate: {}", rest_timeout_duration, rest_timeout_rate);
-					// }
+					if election_vec.len()==5{
+						log::info!("Author.S1, timeout: {:?}, rest_rate: {}", rest_timeout_duration, rest_timeout_rate);
+					}
 
 					futures::select!{
 						block = imported_blocks_stream.next()=>{
@@ -1004,7 +1036,7 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 								if cur_election_weight <= min_election_weight{
 									if min_delay_count < 10 { 
 										min_delay_count += 1;
-										0.01 
+										0.015f32
 									}
 									else {
 										0.0
@@ -1014,9 +1046,9 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 									let rate = (cur_election_weight - min_election_weight) as f32 /
 										(max_election_weight - min_election_weight) as f32;
 									
-									if not_min_delay_count < 20{
+									if not_min_delay_count < 10{
 										not_min_delay_count += 1;
-										rate + 0.1f32
+										rate + 0.25f32
 									}
 									else{
 										rate
@@ -1275,7 +1307,8 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 					}
 				};
 
-				let recv_duration = Duration::from_secs(COMMITTEE_TIMEOUT-2);
+				let promote_secs = 6;
+				let recv_duration = Duration::from_secs(COMMITTEE_TIMEOUT-promote_secs);
 				let full_timeout_duration = recv_duration;
 				let start_time = SystemTime::now();
 
@@ -1362,7 +1395,7 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 									log::info!("Committee.S1: no vote for hash: #{}({})", cur_header.number(), cur_hash);
 								}
 							}
-							Delay::new(Duration::from_millis(2000)).await;
+							// Delay::new(Duration::from_millis(promote_secs*1000)).await;
 							state = CommitteeState::WaitStart;
 							break;
 						},

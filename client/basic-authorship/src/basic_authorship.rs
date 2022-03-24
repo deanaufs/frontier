@@ -43,7 +43,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT},
 };
-use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
+use std::{marker::PhantomData, pin::Pin, sync::Arc, time::{self, SystemTime}};
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
@@ -363,6 +363,8 @@ where
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
 
+		let mut push_count = 0;
+		let mut inner_spend = 0;
 		for pending_tx in pending_iterator {
 			if (self.now)() > deadline {
 				debug!(
@@ -371,6 +373,7 @@ where
 				);
 				break
 			}
+			push_count += 1;
 
 			let pending_tx_data = pending_tx.data().clone();
 			let pending_tx_hash = pending_tx.hash().clone();
@@ -382,7 +385,7 @@ where
 					skipped += 1;
 					debug!(
 						"Transaction would overflow the block size limit, \
-						 but will try {} more transactions before quitting.",
+						but will try {} more transactions before quitting.",
 						MAX_SKIPPED_TRANSACTIONS - skipped,
 					);
 					continue
@@ -393,6 +396,7 @@ where
 				}
 			}
 
+			let inner_time = (self.now)();
 			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
 			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
 				Ok(()) => {
@@ -423,7 +427,9 @@ where
 					unqueue_invalid.push(pending_tx_hash);
 				},
 			}
+			inner_spend += inner_time.elapsed().as_micros();
 		}
+		log::info!("spend: {} μs, count: {}", inner_spend, push_count);
 
 		if hit_block_size_limit && !transaction_pushed {
 			warn!(
@@ -442,7 +448,7 @@ where
 		});
 
 		info!(
-			"🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
+			"🎁 Prepared block for proposing at {} [hash: {}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),

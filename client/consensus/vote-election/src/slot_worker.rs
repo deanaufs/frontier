@@ -34,7 +34,7 @@ use crate::{slots::Slots, MAX_VOTE_RANK, COMMITTEE_TIMEOUT};
 use codec::{Decode, Encode};
 
 // use rand::Rng;
-use futures::{Future, TryFutureExt, channel::mpsc, FutureExt, future::Either};
+use futures::{Future, TryFutureExt, channel::{oneshot, mpsc}, FutureExt, future::Either};
 use futures::StreamExt;
 
 use futures_timer::Delay;
@@ -557,7 +557,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			)
 			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
 
-		let import_delay = Delay::new(proposing_remaining_duration.mul_f32(0.98));
+		// let import_delay = Delay::new(proposing_remaining_duration.mul_f32(0.98));
+		let start_time = SystemTime::now();
 		let proposal = match futures::future::select(proposing, proposing_remaining).await {
 			Either::Left((Ok(p), _)) => p,
 			Either::Left((Err(err), _)) => {
@@ -585,7 +586,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				return None
 			},
 		};
-		import_delay.await;
+		let _ = start_time.elapsed().map(|d|log::info!("proposing time: {}ms", d.as_millis()));
+		// import_delay.await;
 
 		// let proposal = match proposing.await{
 		// 	Ok(p) => p,
@@ -859,6 +861,10 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 					},
 				};
 				worker.propagate_vote(&vrf_signature, &cur_header.hash());
+
+				// let (tx, rx) = mpsc::oneshot();
+				// worker.pre_proposal(&cur_header, rx);
+				// let _ = worker.produce_block(slot_info, &cur_header, &vrf_signature, election_vec).await;
 
 				let mut election_vec = vec![];
 				let mut min_delay_count = 0;
@@ -1307,7 +1313,7 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 					}
 				};
 
-				let promote_secs = 6;
+				let promote_secs = 5;
 				let recv_duration = Duration::from_secs(COMMITTEE_TIMEOUT-promote_secs);
 				let full_timeout_duration = recv_duration;
 				let start_time = SystemTime::now();

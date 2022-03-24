@@ -143,6 +143,7 @@ where
 	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
 
 	fn check(self, lookup: &Lookup) -> Result<Self::Checked, TransactionValidityError> {
+		// log::info!("check");
 		Ok(match self.signature {
 			Some((signed, signature, extra)) => {
 				let signed = lookup.lookup(signed)?;

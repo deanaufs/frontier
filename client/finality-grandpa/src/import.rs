@@ -534,6 +534,7 @@ where
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
+		// log::info!("finality-grandpa import_block(): #{}({})", number, hash);
 
 		// early exit if block already in chain, otherwise the check for
 		// authority changes will error when trying to re-import a change block

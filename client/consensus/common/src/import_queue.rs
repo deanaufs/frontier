@@ -27,7 +27,7 @@
 //! instantiated. The `BasicQueue` and `BasicVerifier` traits allow serial
 //! queues to be instantiated simply.
 
-use std::{collections::HashMap, iter::FromIterator};
+use std::{collections::HashMap, iter::FromIterator, time::SystemTime};
 
 use log::{debug, trace};
 use sp_runtime::{
@@ -203,6 +203,7 @@ pub(crate) async fn import_single_block_metered<
 	verifier: &mut V,
 	metrics: Option<Metrics>,
 ) -> BlockImportResult<B> {
+	let start_time = SystemTime::now();
 	let peer = block.origin;
 
 	let (header, justifications) = match (block.header, block.justifications) {
@@ -222,6 +223,13 @@ pub(crate) async fn import_single_block_metered<
 	let number = header.number().clone();
 	let hash = block.hash;
 	let parent_hash = header.parent_hash().clone();
+
+	// log::info!(
+	// 	"common/src/import_queue.rs, import_single...(): import block #{}({}), {:?}",
+	// 	number,
+	// 	hash,
+	// 	peer,
+	// );
 
 	let import_handler = |import| match import {
 		Ok(ImportResult::AlreadyInChain) => {
@@ -284,6 +292,11 @@ pub(crate) async fn import_single_block_metered<
 		import_block.state_action = StateAction::ExecuteIfPossible;
 	}
 
+	let mut tx_count = 0;
+	if let Some(body) = &import_block.body{
+		tx_count = body.len();
+	}
+
 	let (import_block, maybe_keys) = verifier.verify(import_block).await.map_err(|msg| {
 		if let Some(ref peer) = peer {
 			trace!(target: "sync", "Verifying {}({}) from {} failed: {}", number, hash, peer, msg);
@@ -306,5 +319,10 @@ pub(crate) async fn import_single_block_metered<
 	if let Some(metrics) = metrics.as_ref() {
 		metrics.report_verification_and_import(started.elapsed());
 	}
+	let _ = start_time.elapsed().map(|d|log::info!(
+		"common import queue, spend time: {}tx, {}ms",
+		tx_count,
+		d.as_millis()),
+	);
 	import_handler(imported)
 }

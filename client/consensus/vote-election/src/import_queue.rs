@@ -247,7 +247,7 @@ pub struct AuraVerifier<C, P, CAW, CIDP> {
 	phantom: PhantomData<P>,
 	create_inherent_data_providers: CIDP,
 	can_author_with: CAW,
-	check_for_equivocation: CheckForEquivocation,
+	_check_for_equivocation: CheckForEquivocation,
 	telemetry: Option<TelemetryHandle>,
 }
 
@@ -256,14 +256,14 @@ impl<C, P, CAW, CIDP> AuraVerifier<C, P, CAW, CIDP> {
 		client: Arc<C>,
 		create_inherent_data_providers: CIDP,
 		can_author_with: CAW,
-		check_for_equivocation: CheckForEquivocation,
+		_check_for_equivocation: CheckForEquivocation,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		Self {
 			client,
 			create_inherent_data_providers,
 			can_author_with,
-			check_for_equivocation,
+			_check_for_equivocation,
 			telemetry,
 			phantom: PhantomData,
 		}

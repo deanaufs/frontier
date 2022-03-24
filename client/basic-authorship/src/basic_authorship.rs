@@ -273,8 +273,9 @@ where
 			"basic-authorship-proposer",
 			Box::pin(async move {
 				// leave some time for evaluation and block finalization (33%)
-				// log::info!("basic_authorship, propose duration: {}ms", (max_duration-max_duration/3).as_millis());
-				let deadline = (self.now)() + max_duration - max_duration / 3;
+				// log::info!("basic_authorship, propose full duration: {}ms", (max_duration-max_duration/8).as_millis());
+				// let deadline = (self.now)() + max_duration;
+				let deadline = (self.now)() + max_duration - max_duration / 8;
 				let res = self
 					.propose_with(inherent_data, inherent_digests, deadline, block_size_limit)
 					.await;
@@ -444,7 +445,7 @@ where
 		// }
 		let d= start_time.elapsed();
 		log::info!(
-			"basic_authorship: block build spend: {}ms, {}tx",
+			"basic_authorship: package transactions spend: {}ms, {}tx",
 			d.as_millis(),
 			push_count,
 		);

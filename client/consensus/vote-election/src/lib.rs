@@ -123,7 +123,7 @@ type AuthorityId<P> = <P as Pair>::Public;
 pub type SlotDuration = slot_worker::SlotDuration<sp_consensus_vote_election::SlotDuration>;
 
 pub const MAX_VOTE_RANK :usize = 5;
-pub const COMMITTEE_TIMEOUT :u64 = 10;
+pub const COMMITTEE_TIMEOUT :u64 = 5;
 // pub const VOTE_ENGINE_ID : ConsensusEngineId = *b"VOTE";
 // pub const VOTE_VRF_PREFIX: &[u8] = b"substrate-vote-vrf";
 

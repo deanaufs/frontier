@@ -454,7 +454,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let logging_target = self.logging_target();
 
 		// let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
-		let proposing_remaining_duration = Duration::from_millis(6000);
+		let proposing_remaining_duration = Duration::from_secs(COMMITTEE_TIMEOUT-1);
 		let proposing_remaining = Delay::new(proposing_remaining_duration.clone());
 
 		let epoch_data = match self.epoch_data(&parent_header, slot) {
@@ -1313,8 +1313,8 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 					}
 				};
 
-				let promote_secs = 5;
-				let recv_duration = Duration::from_secs(COMMITTEE_TIMEOUT-promote_secs);
+				// let promote_secs = 5;
+				let recv_duration = Duration::from_secs(COMMITTEE_TIMEOUT);
 				let full_timeout_duration = recv_duration;
 				let start_time = SystemTime::now();
 

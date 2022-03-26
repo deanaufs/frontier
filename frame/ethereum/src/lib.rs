@@ -678,7 +678,8 @@ impl<T: Config> Pallet<T> {
 			}
 		};
 
-		Pending::<T>::append((transaction, status, receipt));
+		// Pending::<T>::append((transaction, status, receipt));
+		Pending::<T>::mutate(|v|v.push((transaction, status, receipt)));
 
 		Self::deposit_event(Event::Executed(
 			source,

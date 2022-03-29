@@ -204,6 +204,9 @@ pub mod pallet {
 
 		fn on_initialize(_: T::BlockNumber) -> Weight {
 			Pending::<T>::kill();
+			// log::info!("pending count: {}", PendingCount::<T>::get());
+			PendingCount::<T>::put(0);
+			PendingMap::<T>::remove_all(None);
 			let mut weight = T::SystemWeightInfo::kill_storage(1);
 
 			// If the digest contain an existing ethereum block(encoded as PreLog), If contains,
@@ -284,6 +287,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type Pending<T: Config> =
 		StorageValue<_, Vec<(Transaction, TransactionStatus, Receipt)>, ValueQuery>;
+	
+	#[pallet::storage]
+	pub(super) type PendingMap<T: Config> =
+		StorageMap<_, Blake2_128Concat, u32, (Transaction, TransactionStatus, Receipt)>;
+
+	#[pallet::storage]
+	pub(super) type PendingCount<T: Config> = StorageValue<_, u32, ValueQuery>;
+	// pub(super) type PendingMap<T: Config> =
+	// 	StorageMap<_, Blake2_128Concat, u32, Transaction>;
 
 	/// The current Ethereum block.
 	#[pallet::storage]
@@ -408,18 +420,39 @@ impl<T: Config> Pallet<T> {
 		let mut receipts = Vec::new();
 		let mut logs_bloom = Bloom::default();
 		let mut cumulative_gas_used = U256::zero();
-		for (transaction, status, receipt) in Pending::<T>::get() {
-			transactions.push(transaction);
-			statuses.push(status);
-			receipts.push(receipt.clone());
-			let (logs, used_gas) = match receipt {
-				Receipt::Legacy(d) | Receipt::EIP2930(d) | Receipt::EIP1559(d) => {
-					(d.logs.clone(), d.used_gas)
-				}
-			};
-			cumulative_gas_used = used_gas;
-			Self::logs_bloom(logs, &mut logs_bloom);
+
+		let pending_count = PendingCount::<T>::get();
+		let mut push_count = 0;
+		for i in 0..pending_count{
+			if let Some((transaction, status, receipt)) = PendingMap::<T>::get(i){
+				push_count += 1;
+				transactions.push(transaction);
+				statuses.push(status);
+				receipts.push(receipt.clone());
+				let (logs, used_gas) = match receipt {
+					Receipt::Legacy(d) | Receipt::EIP2930(d) | Receipt::EIP1559(d) => {
+						(d.logs.clone(), d.used_gas)
+					}
+				};
+				cumulative_gas_used = used_gas;
+				Self::logs_bloom(logs, &mut logs_bloom);
+			}
 		}
+		// log::info!("push: {}/total: {}, block_number: {}", push_count, pending_count, block_number);
+		// PendingCount::<T>::set(0);
+
+		// for (transaction, status, receipt) in Pending::<T>::get() {
+		// 	transactions.push(transaction);
+		// 	statuses.push(status);
+		// 	receipts.push(receipt.clone());
+		// 	let (logs, used_gas) = match receipt {
+		// 		Receipt::Legacy(d) | Receipt::EIP2930(d) | Receipt::EIP1559(d) => {
+		// 			(d.logs.clone(), d.used_gas)
+		// 		}
+		// 	};
+		// 	cumulative_gas_used = used_gas;
+		// 	Self::logs_bloom(logs, &mut logs_bloom);
+		// }
 
 		let ommers = Vec::<ethereum::Header>::new();
 		let receipts_root =
@@ -586,9 +619,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn apply_validated_transaction(source: H160, transaction: Transaction) -> PostDispatchInfo {
-		let pending = Pending::<T>::get();
+		// let pending = Pending::<T>::get();
 		let transaction_hash = transaction.hash();
-		let transaction_index = pending.len() as u32;
+		// let transaction_index = pending.len() as u32;
+		let transaction_index = PendingCount::<T>::get();
 
 		let (to, _, info) = Self::execute(source, &transaction, None)
 			.expect("transaction is already validated; error indicates that the block is invalid");
@@ -639,7 +673,9 @@ impl<T: Config> Pallet<T> {
 			};
 			let logs_bloom = status.clone().logs_bloom;
 			let logs = status.clone().logs;
-			let cumulative_gas_used = if let Some((_, _, receipt)) = pending.last() {
+
+			let last_index = transaction_index;
+			let cumulative_gas_used = if let Some((_, _, receipt)) = PendingMap::<T>::get(last_index) {
 				match receipt {
 					Receipt::Legacy(d) | Receipt::EIP2930(d) | Receipt::EIP1559(d) => {
 						d.used_gas.saturating_add(used_gas)
@@ -648,6 +684,17 @@ impl<T: Config> Pallet<T> {
 			} else {
 				used_gas
 			};
+
+			// let cumulative_gas_used = if let Some((_, _, receipt)) = pending.last() {
+			// 	match receipt {
+			// 		Receipt::Legacy(d) | Receipt::EIP2930(d) | Receipt::EIP1559(d) => {
+			// 			d.used_gas.saturating_add(used_gas)
+			// 		}
+			// 	}
+			// } else {
+			// 	used_gas
+			// };
+
 			match &transaction {
 				Transaction::Legacy(_) => Receipt::Legacy(ethereum::EIP658ReceiptData {
 					status_code,
@@ -671,7 +718,9 @@ impl<T: Config> Pallet<T> {
 		};
 
 		// Pending::<T>::append((transaction, status, receipt));
-		Pending::<T>::mutate(|v|v.push((transaction, status, receipt)));
+		// Pending::<T>::mutate(|v|v.push((transaction, status, receipt)));
+		PendingMap::<T>::insert(transaction_index, (transaction, status, receipt));
+		PendingCount::<T>::set(transaction_index+1);
 
 		Self::deposit_event(Event::Executed(
 			source,

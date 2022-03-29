@@ -558,7 +558,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
 
 		// let import_delay = Delay::new(proposing_remaining_duration.mul_f32(0.98));
-		let start_time = SystemTime::now();
+		// let start_time = SystemTime::now();
 		let proposal = match futures::future::select(proposing, proposing_remaining).await {
 			Either::Left((Ok(p), _)) => p,
 			Either::Left((Err(err), _)) => {
@@ -586,7 +586,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 				return None
 			},
 		};
-		let _ = start_time.elapsed().map(|d|log::info!("proposing time: {}ms", d.as_millis()));
+		// let _ = start_time.elapsed().map(|d|log::info!("proposing time: {}ms", d.as_millis()));
 		// import_delay.await;
 
 		// let proposal = match proposing.await{

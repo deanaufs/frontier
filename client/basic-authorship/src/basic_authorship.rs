@@ -445,7 +445,7 @@ where
 		// }
 		let d= start_time.elapsed();
 		log::info!(
-			"basic_authorship: package transactions spend: {}ms, {}tx",
+			"basic_authorship: pack transactions spend: {} ms, {} tx",
 			d.as_millis(),
 			push_count,
 		);

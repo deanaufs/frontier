@@ -6,10 +6,12 @@ spec_file = "./tmp/RawSpec.json"
 ipv4 = "0.0.0.0"
 public_ip = "221.121.151.89"
 boot_peer_id="12D3KooWJTKdM3TkwGEjHcfEuWMHqAa9BjnmZJHX2mnCH4N35xaA"
+run_mode = "release"
+# run_mode = "debug"
 
 boot_node_str = """# 启动节点{5}
-./target/debug/{0} purge-chain --base-path ./tmp/{5} --chain local -y;\\
-./target/debug/{0} \\
+./target/{7}/{0} purge-chain --base-path ./tmp/{5} --chain local -y;\\
+./target/{7}/{0} \\
     --base-path ./tmp/{5} \\
     --chain {6} \\
     --public-addr /ip4/{1}/tcp/{2} \\
@@ -19,14 +21,15 @@ boot_node_str = """# 启动节点{5}
     --validator \\
     --rpc-cors all \\
     --unsafe-rpc-external \\
+    --unsafe-ws-external \\
     --telemetry-url 'wss://telemetry.polkadot.io/submit/ 0' \\
     --name {5} &>./tmp/{5}.log &\\
 sleep 0.1s
-""".format(app_name, public_ip, PORT, WS_PORT, RPC_PORT, "C01", spec_file)
+""".format(app_name, public_ip, PORT, WS_PORT, RPC_PORT, "C01", spec_file, run_mode)
 
 committee_node_str = """#启动节点{0}
-./target/debug/{1} purge-chain --base-path ./tmp/{0} --chain local -y;\\
-./target/debug/{1} \\
+./target/{7}/{1} purge-chain --base-path ./tmp/{0} --chain local -y;\\
+./target/{7}/{1} \\
     --base-path ./tmp/{0} \\
     --chain {6} \\
     --public-addr /ip4/{5}/tcp/{2} \\
@@ -66,7 +69,7 @@ for i in range(0, committee_count):
         ws_port = WS_PORT + i
         rpc_port = RPC_PORT + i
 
-        print(committee_node_str.format(node_name, app_name, port, ws_port, rpc_port, public_ip, spec_file))
+        print(committee_node_str.format(node_name, app_name, port, ws_port, rpc_port, public_ip, spec_file, run_mode))
 
 print()
 for i in range(0, author_count):
@@ -76,4 +79,4 @@ for i in range(0, author_count):
     ws_port = WS_PORT + int((committee_count+20)/10)*10 + i
     rpc_port = RPC_PORT + int((committee_count+20)/10) + 10+ i
 
-    print(author_node_str.format(node_name, app_name, port, ws_port, rpc_port, public_ip, spec_file))
+    print(author_node_str.format(node_name, app_name, port, ws_port, rpc_port, public_ip, spec_file, run_mode))

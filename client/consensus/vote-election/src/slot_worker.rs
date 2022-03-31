@@ -1054,7 +1054,7 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 									
 									if not_min_delay_count < 10{
 										not_min_delay_count += 1;
-										rate + 0.25f32
+										rate + 0.66f32
 									}
 									else{
 										rate

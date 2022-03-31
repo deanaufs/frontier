@@ -467,12 +467,12 @@ where
 		});
 
 		info!(
-			"🎁 Prepared block for proposing at {} [hash: {}; parent_hash: {};",
-			// "🎁 Prepared block for proposing at {} [hash: {}; parent_hash: {}; extrinsics ({}): [{}]",
+			// "🎁 Prepared block for proposing at {} [hash: {}; parent_hash: {};",
+			"🎁 Prepared block for proposing at {} [hash: {}; parent_hash: {}; extrinsics ({})",
 			block.header().number(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
-			// block.extrinsics().len(),
+			block.extrinsics().len(),
 			// block.extrinsics()
 			// 	.iter()
 			// 	.map(|xt| format!("{}({})", BlakeTwo256::hash_of(xt), xt.encoded_size()))
@@ -480,17 +480,17 @@ where
 			// 	.collect::<Vec<_>>()
 			// 	.join(", ")
 		);
-		log::info!(
-			"☃ #{} extrinsics ({}): [{}]",
-			block.header().number(),
-			block.extrinsics().len(),
-			block.extrinsics()
-				.iter()
-				.map(|xt| format!("{}({})", BlakeTwo256::hash_of(xt), xt.encoded_size()))
-				// .map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
-				.collect::<Vec<_>>()
-				.join(", ")
-		);
+		// log::info!(
+		// 	"☃ #{} extrinsics ({}): [{}]",
+		// 	block.header().number(),
+		// 	block.extrinsics().len(),
+		// 	block.extrinsics()
+		// 		.iter()
+		// 		.map(|xt| format!("{}({})", BlakeTwo256::hash_of(xt), xt.encoded_size()))
+		// 		// .map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
+		// 		.collect::<Vec<_>>()
+		// 		.join(", ")
+		// );
 		telemetry!(
 			self.telemetry;
 			CONSENSUS_INFO;

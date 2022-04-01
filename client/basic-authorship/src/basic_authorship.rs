@@ -427,7 +427,7 @@ where
 				},
 			}
 		}
-		log::info!("spend: {} ms, count: {}", start.elapsed().as_millis(), push_count);
+		log::info!("basic_authorship, pack {} tx, {} ms", push_count, start.elapsed().as_millis());
 
 		if hit_block_size_limit && !transaction_pushed {
 			warn!(

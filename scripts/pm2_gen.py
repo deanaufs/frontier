@@ -1,11 +1,11 @@
 
 bootnode_cmd = """# 启动节点{0}
-./target/{4}/frontier-template-node purge-chain --base-path ./tmp/{0} --chain local -y;\\
-> ./tmp/{0}.log;\\
-pm2 start -n {0} --log ./tmp/{0}.log \\
+./target/{4}/frontier-template-node purge-chain --base-path ./tmp/base/{0} -y;\\
+> ./tmp/log/{0}.log;\\
+pm2 start -n {0} --log ./tmp/log/{0}.log \\
 ./target/{4}/frontier-template-node --\\
     --{0} \\
-    --base-path ./tmp/{0} \\
+    --base-path ./tmp/base/{0} \\
     --chain {5} \\
     --port {1} \\
     --rpc-port {2} \\
@@ -20,12 +20,12 @@ sleep 0.1s
 """
 
 node_cmd = """# 启动节点{0}
-./target/{4}/frontier-template-node purge-chain --base-path ./tmp/{0} --chain local -y;\\
-> ./tmp/{0}.log;\\
-pm2 start -n {0} --log ./tmp/{0}.log \\
+./target/{4}/frontier-template-node purge-chain --base-path ./tmp/base/{0} -y;\\
+> ./tmp/log/{0}.log;\\
+pm2 start -n {0} --log ./tmp/log/{0}.log \\
 ./target/{4}/frontier-template-node --\\
     --{0} \\
-    --base-path ./tmp/{0} \\
+    --base-path ./tmp/base/{0} \\
     --chain {5} \\
     --port {1} \\
     --rpc-port {2} \\

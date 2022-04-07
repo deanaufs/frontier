@@ -422,10 +422,10 @@ impl<T: Config> Pallet<T> {
 		let mut cumulative_gas_used = U256::zero();
 
 		let pending_count = PendingCount::<T>::get();
-		let mut push_count = 0;
+		// let mut push_count = 0;
 		for i in 0..pending_count{
 			if let Some((transaction, status, receipt)) = PendingMap::<T>::get(i){
-				push_count += 1;
+				// push_count += 1;
 				transactions.push(transaction);
 				statuses.push(status);
 				receipts.push(receipt.clone());

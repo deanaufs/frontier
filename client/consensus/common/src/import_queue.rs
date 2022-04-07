@@ -320,7 +320,7 @@ pub(crate) async fn import_single_block_metered<
 		metrics.report_verification_and_import(started.elapsed());
 	}
 	let _ = start_time.elapsed().map(|d|log::info!(
-		"import block #{}, spend time: {} tx, {} ms",
+		"import_queue block #{}, spend time: {} tx, {} ms",
 		number,
 		tx_count,
 		d.as_millis()),

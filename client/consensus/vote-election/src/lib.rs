@@ -457,7 +457,7 @@ where
 						// 	block.header.number(),
 						// 	block.hash
 						// );
-						while pre_finalize_vec.len() > 3{
+						while pre_finalize_vec.len() > 0{
 							let finalize_hash = pre_finalize_vec.remove(0);
 
 							match client.finalize_block(BlockId::Hash(finalize_hash.clone()), None, true){

@@ -41,7 +41,7 @@ use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT},
+	traits::{Block as BlockT, DigestFor, Header as HeaderT},
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 

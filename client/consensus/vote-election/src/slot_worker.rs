@@ -34,7 +34,7 @@ use crate::{slots::Slots, MAX_VOTE_RANK, COMMITTEE_TIMEOUT};
 use codec::{Decode, Encode};
 
 // use rand::Rng;
-use futures::{Future, TryFutureExt, channel::{oneshot, mpsc}, FutureExt, future::Either};
+use futures::{Future, TryFutureExt, channel::{mpsc}, FutureExt, future::Either};
 use futures::StreamExt;
 
 use futures_timer::Delay;
@@ -55,7 +55,7 @@ use sp_runtime::{
 // use sp_blockchain::ProvideCache;
 use sp_timestamp::Timestamp;
 use std::{fmt::Debug, ops::Deref, time::{Duration, SystemTime }, sync::Arc};
-use std::collections::{BTreeMap, HashMap, btree_map::Entry};
+use std::collections::{BTreeMap, HashMap};
 use sp_keystore::vrf::VRFSignature;
 
 use sc_client_api::{
@@ -943,7 +943,7 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 
 								if import_block_election_info.weight <= min_election_weight {	// exceed 51%
 									log::info!(
-										"Author.S1, block #{} ({}) from outside with exceed 50% election", 
+										"Author.S1, import block #{} ({}) from outside with exceed 50% election", 
 										block.header.number(),
 										block.hash
 									);
@@ -1001,7 +1001,7 @@ pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
 								}
 								else{
 									log::warn!(
-										"Author.S1, AS1#02 need handle: this situation: cur: #{}({}), new: #{}({})",
+										"Author.S1, AS1#02 need handle: cur: #{}({}), new: #{}({})",
 										cur_header.number(),
 										cur_header.hash(),
 										block.header.number(),
@@ -1216,7 +1216,7 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 	}
 
 	let mut state = <CommitteeState<B>>::WaitStart;
-	loop{
+	'outer: loop{
 		match state{
 			CommitteeState::WaitStart=>{
 				log::info!("► CommitteeState::S0, wait start");
@@ -1386,7 +1386,7 @@ pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
 								let mut election_result = vec![];
 								let cur_hash = cur_header.hash();
 								if let Some(bt_map) = root_vote_map.get(&cur_hash){
-									for (_, (k, v)) in bt_map.iter().enumerate(){
+									for (_, (_k, v)) in bt_map.iter().enumerate(){
 										// log::info!("{}:{:?}", i, v);
 										// log::info!("--Committee send back: ({:?}, {:?}) {}", v.sig_bytes[0..2], v.pub_bytes[0..2], cur_hash);
 										// log::info!("--Committee send: ({:?}), {}", v.pub_bytes, cur_hash);

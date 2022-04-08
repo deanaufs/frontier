@@ -98,7 +98,7 @@ use schnorrkel::{keys::PublicKey};
 
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header, Member, NumberFor, Zero},
+	traits::{Block as BlockT, Header, Member, NumberFor, Zero, One},
 	DigestItem,
 };
 
@@ -442,6 +442,10 @@ where
 
     loop{
         if let Some(block)= imported_blocks_stream.next().await{
+			if block.header.number().is_one() {
+				// avoid re-finalize block #0
+				continue;
+			}
 
             // min_election_weight: authority_len, MAX_VOTE_RANK
             if let Ok(committee_vec) = authorities(client.as_ref(), &BlockId::Hash(block.hash)){
@@ -450,14 +454,9 @@ where
 				if let Ok(weight) = caculate_block_weight::<A, B, P::Signature, C>(&block.header, client.as_ref()){
 
 					if weight <= min_election_weight{
-						pre_finalize_vec.push(block.hash);
-						// log::info!(
-						// 	"⇩ Finalizer: buffer finalize block({}): #{} ({})",
-						// 	pre_finalize_vec.len(),
-						// 	block.header.number(),
-						// 	block.hash
-						// );
-						while pre_finalize_vec.len() > 0{
+						pre_finalize_vec.push(block.header.parent_hash().clone());
+						// pre_finalize_vec.push(block.hash);
+						while pre_finalize_vec.len() > 2{
 							let finalize_hash = pre_finalize_vec.remove(0);
 
 							match client.finalize_block(BlockId::Hash(finalize_hash.clone()), None, true){
@@ -478,6 +477,7 @@ where
         }
     }
 }
+
 
 /// Parameters of [`build_aura_worker`].
 pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS> {

@@ -1287,7 +1287,16 @@ where
 		id: &BlockId<Block>,
 		keys: &mut dyn Iterator<Item = &[u8]>,
 	) -> sp_blockchain::Result<StorageProof> {
-		self.state_at(id).and_then(|state| prove_read(state, keys).map_err(Into::into))
+		match self.state_at(id){
+			Ok(state)=>{
+				let r= prove_read(state, keys).map_err(Into::into);
+				r
+			}
+			Err(e)=>{
+				Err(e)?
+			}
+		}
+		// self.state_at(id).and_then(|state| prove_read(state, keys).map_err(Into::into))
 	}
 
 	fn read_child_proof(

@@ -1518,15 +1518,21 @@ mod tests {
 		let missing_child_info = ChildInfo::new_default(b"sub1sub2"); // key will include other child root to proof.
 		let child_info = &child_info;
 		let missing_child_info = &missing_child_info;
+
 		// fetch read proof from 'remote' full node
+		// "value2": 24
 		let remote_backend = trie_backend::tests::test_trie();
+
+		// remote_root: 0x7d5d935fc1b525ffa8a647e87cb228f1b8a97c5a129149de52b0344b17fa69fc
 		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
 		let remote_proof = test_compact(remote_proof, &remote_root);
+
 		// check proof locally
 		let local_result1 =
 			read_proof_check::<BlakeTwo256, _>(remote_root, remote_proof.clone(), &[b"value2"])
 				.unwrap();
+
 		let local_result2 =
 			read_proof_check::<BlakeTwo256, _>(remote_root, remote_proof.clone(), &[&[0xff]])
 				.is_ok();

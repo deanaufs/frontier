@@ -2255,11 +2255,23 @@ where
 			self.backend.as_ref(),
 			Some(newest_block),
 		) {
-			let header = self.client.header(id).unwrap().unwrap();
+
+			let header = self.client.header(id)
+				.map_err(|e|internal_err(format!("Get chain header failed: {}", e)))?
+				.ok_or(internal_err(format!("No expect header: {}", id)))?;
 			// Highest and lowest block number within the requested range.
+			let block_number = self.client.number(header.hash())
+				.map_err(|e|internal_err(format!("Get block number failed: {}", e)))?
+				.ok_or(internal_err(format!("Get block nubmer failed")))?;
 			let highest = UniqueSaturatedInto::<u64>::unique_saturated_into(
-				self.client.number(header.hash()).unwrap().unwrap(),
+				block_number,
 			);
+			// let header = self.client.header(id).unwrap().unwrap();
+			// Highest and lowest block number within the requested range.
+			// let highest = UniqueSaturatedInto::<u64>::unique_saturated_into(
+			// 	self.client.number(header.hash()).unwrap().unwrap(),
+			// );
+
 			let lowest = highest.saturating_sub(block_count);
 			// Tip of the chain.
 			let best_number =

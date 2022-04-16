@@ -178,7 +178,7 @@ impl<T: Config> Runner<T> {
 		}
 
 		for log in &state.substate.logs {
-			log::trace!(
+			log::info!(
 				target: "evm",
 				"Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
 				log.address,

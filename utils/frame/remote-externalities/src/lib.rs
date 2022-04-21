@@ -208,7 +208,7 @@ impl<B: BlockT> Builder<B> {
 		key: StorageKey,
 		maybe_at: Option<B::Hash>,
 	) -> Result<StorageData, &'static str> {
-		trace!(target: LOG_TARGET, "rpc: get_storage");
+		info!(target: LOG_TARGET, "rpc: get_storage");
 		RpcApi::<B>::get_storage(self.as_online().rpc_client(), key, maybe_at)
 			.await
 			.map_err(|e| {

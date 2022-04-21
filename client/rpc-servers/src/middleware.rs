@@ -179,7 +179,7 @@ impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
 		let name = call_name(&call, &self.known_rpc_method_names).to_owned();
 		let metrics = self.metrics.clone();
 		let transport_label = self.transport_label.clone();
-		log::info!(target: "rpc_metrics", "[{}] {} call: {:?}", transport_label, name, &call);
+		log::trace!(target: "rpc_metrics", "[{}] {} call: {:?}", transport_label, name, &call);
 		if let Some(ref metrics) = metrics {
 			metrics
 				.calls_started

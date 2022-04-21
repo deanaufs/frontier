@@ -457,7 +457,7 @@ mod tests {
 	use codec::{Compact, Decode, Encode};
 	use hash_db::{HashDB, Hasher};
 	use hex_literal::hex;
-	use sp_core::Blake2Hasher;
+	use sp_core::{Blake2Hasher, KeccakHasher};
 	use trie_db::{DBValue, NodeCodec as NodeCodecT, Trie, TrieMut};
 	use trie_standardmap::{Alphabet, StandardMap, ValueMode};
 
@@ -799,6 +799,58 @@ mod tests {
 			&[(non_included_key, Some(hex!("1010").to_vec()))],
 		)
 		.is_err());
+	}
+
+	#[test]
+	// cargo test --package sp-trie --lib -- tests::user_proof --exact --nocapture
+	fn user_proof(){
+		use sp_runtime::traits::BlakeTwo256;
+		type TestLayout = super::Layout<BlakeTwo256>;
+		// type TestLayout = super::Layout<KeccakHasher>;
+		// type TestLayout = super::Layout<Blake2Hasher>;
+
+		let mut root = <<TestLayout as TrieLayout>::Hash as Hasher>::Out::default();
+		// // let mut root = Blake2Hasher::Out::default();
+		// // let mut root = <Blake2Hasher as Trait>::Out::default();
+		// let mut root = <Blake2Hasher as Hasher>::Out::default();
+
+		// let plain_hash = hex!("41bcaeac6241e5c52c0b3919e8ed95fac2dc7eb2fd62c44142567211fc7db3b8");
+		// let proof = vec![
+		// 	hex!("9e0d1176a568c1f92944340dbfed9e9c3000505f0e7b9012096b41c4eb3aaf947f6ea429080000801f98c9eb66fcca07dfbdd28d0b7a68b9ec24eae102d7bb394f2b88a61420410e").to_vec(),
+		// 	hex!("80809080277266f06bf0fde85046b5867a230023798b366d27ed95a9d9b07d7f41d8b96980140b4b9148bc2e03a7f8a4c223a70dc7e7984871cfea135d844e15126336a11e800765a4a3238ce7663f9547a4b3e59fb1683dac09d3a81f8955e37b4b649e0543").to_vec(),
+		// 	hex!("5f030ebca703c85910e7164cb7d1c9e47b80d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d").to_vec(),
+		// 	hex!("802e9a805023821239027c0816afd4ac1321fd15763e8488eabd01832ee60552f9b5f8048029e07d99bad6d30759ebefeb5ef6c6fad47fb8fbfecd3b43e483c3fde6218fa88002976a6a7613f696414c889f011e0775c20a8ff10bfb3cb46747cdc081d7c97180c233a6a1d1c2e3d358bcaf637d2f3adb32c84500c31709bf03c92e27f07e26958033ad2c194513b8ced6b749c8b5b1375552afb6b7b1f90369f562b8360c56b7838094dda19393bf0e9fde2b5c976912fce45a7090e003b88fa39f9161a84fb4d7048097b467e22893fddfedf13d220a4788cf8b86802c79733b73d2a19f54f33ede198074559123c2e959b5989d70aeeb8048b1ca677f880e3884be1b8696adc08b2ed0").to_vec(),
+		// ];
+
+		// let plain_hash = hex!("a0ce58d57b30f870aa71e36d3a494761058aef2a1edc5515ad741f38b057b896");
+		// let proof = vec![
+		// 	hex!("802e9a805023821239027c0816afd4ac1321fd15763e8488eabd01832ee60552f9b5f80480e459e64b64603349f27fe94530ffb07e9735e88b04bff9af75c3019a02f04b52806cef696eb69ce8d2c7e92424337de4518a283138c5f889b8d5035aefd12dbd7a805416b272c102cf1b190009d54b1270e9914991a80b5c3eb637c38d60457794328050865692b7fa4023b01bea9517b27c85594ab8c103410d9769a841b6c8f380ce80463b43f378c8919bc5ba39bb2ad69b1836f9e61b7d624ae06aa62c849354ce3a8034f1b6eb9db9201e79e12a09db657cff898fb65fcecb9d026ef15638f1ad6bc08001dff68b11708d5207494c095ca0d90c391cb9fb48159f6a25f032c3ce980d76").to_vec(),
+		// 	hex!("9e0d1176a568c1f92944340dbfed9e9c3000505f0e7b9012096b41c4eb3aaf947f6ea429080000801f98c9eb66fcca07dfbdd28d0b7a68b9ec24eae102d7bb394f2b88a61420410e").to_vec(),
+		// 	hex!("8080908065f2bb830e46e56e34f166bda5b0a5d1e0ad7362a689c5e66e72ee5d970bd8b480140b4b9148bc2e03a7f8a4c223a70dc7e7984871cfea135d844e15126336a11e800765a4a3238ce7663f9547a4b3e59fb1683dac09d3a81f8955e37b4b649e0543").to_vec(),
+		// 	hex!("5f030ebca703c85910e7164cb7d1c9e47b80d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d").to_vec(),
+		// ];
+	
+		// let test_key = hex!("5c0d1176a568c1f92944340dbfed9e9c530ebca703c85910e7164cb7d1c9e47b");
+		// let test_value = DBValue::from(hex!("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"));
+		// let items = vec![(test_key, Some(test_value))];
+
+		let plain_hash = hex!("7d5d935fc1b525ffa8a647e87cb228f1b8a97c5a129149de52b0344b17fa69fc");
+
+		let proof_item: Vec<u8> = vec![128, 200, 255, 128, 66, 32, 122, 180, 80, 197, 138, 189, 51, 145, 196, 171, 154, 45, 110, 247, 45, 82, 216, 199, 253, 166, 17, 222, 165, 215, 231, 226, 169, 179, 111, 130, 40, 69, 11, 101, 121, 20, 118, 97, 108, 117, 101, 64, 138, 102, 22, 199, 86, 83, 6, 0, 12, 64, 4, 42, 12, 64, 4, 24, 128, 114, 225, 243, 92, 239, 167, 71, 70, 98, 174, 237, 237, 106, 151, 1, 200, 14, 199, 101, 49, 207, 152, 158, 175, 178, 235, 188, 8, 49, 136, 81, 163, 128, 91, 114, 30, 243, 74, 76, 118, 171, 133, 59, 30, 6, 246, 55, 158, 139, 253, 247, 138, 208, 182, 87, 161, 8, 255, 38, 193, 205, 126, 250, 232, 20, 128, 15, 246, 233, 179, 242, 90, 139, 87, 149, 79, 129, 156, 26, 49, 125, 67, 159, 66, 38, 207, 243, 160, 97, 159, 172, 207, 45, 121, 221, 66, 203, 136, 128, 61, 227, 248, 178, 45, 117, 151, 194, 9, 141, 209, 58, 140, 19, 176, 97, 58, 186, 235, 158, 47, 189, 224, 137, 251, 254, 221, 242, 159, 53, 189, 164, 128, 160, 95, 113, 186, 143, 53, 96, 170, 230, 27, 222, 46, 166, 30, 8, 19, 87, 202, 211, 193, 72, 15, 88, 184, 184, 113, 155, 66, 120, 129, 233, 86, 128, 166, 253, 174, 179, 130, 71, 20, 213, 179, 156, 223, 51, 143, 51, 42, 241, 39, 135, 192, 190, 116, 47, 71, 110, 60, 111, 99, 70, 13, 156, 248, 140, 128, 35, 25, 181, 159, 218, 107, 197, 75, 69, 173, 207, 24, 133, 15, 39, 202, 12, 186, 50, 28, 231, 98, 79, 115, 2, 13, 221, 107, 81, 73, 140, 95, 128, 228, 54, 38, 186, 229, 206, 10, 232, 251, 122, 170, 185, 56, 47, 75, 5, 151, 2, 180, 21, 194, 48, 207, 11, 14, 251, 140, 225, 136, 36, 191, 74];
+		let proof = vec![
+			proof_item,
+		];
+		let test_key: Vec<u8> = vec![118, 97, 108, 117, 101, 50];
+		let test_value: Vec<u8> = vec![23];
+		let items = vec![(test_key, Some(test_value))];
+
+		root.as_mut().copy_from_slice(&plain_hash);
+		let r = verify_trie_proof::<TestLayout, _, _, _>(
+			&root,
+			&proof,
+			&items,
+		);
+		println!("{:?}", r);
 	}
 
 	#[test]

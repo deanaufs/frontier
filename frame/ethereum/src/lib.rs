@@ -290,12 +290,11 @@ pub mod pallet {
 	
 	#[pallet::storage]
 	pub(super) type PendingMap<T: Config> =
+		// StorageMap<_, Identity, u32, (Transaction, TransactionStatus, Receipt)>;
 		StorageMap<_, Blake2_128Concat, u32, (Transaction, TransactionStatus, Receipt)>;
 
 	#[pallet::storage]
 	pub(super) type PendingCount<T: Config> = StorageValue<_, u32, ValueQuery>;
-	// pub(super) type PendingMap<T: Config> =
-	// 	StorageMap<_, Blake2_128Concat, u32, Transaction>;
 
 	/// The current Ethereum block.
 	#[pallet::storage]

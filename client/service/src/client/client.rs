@@ -1290,6 +1290,7 @@ where
 		match self.state_at(id){
 			Ok(state)=>{
 				let r= prove_read(state, keys).map_err(Into::into);
+				log::info!("p1: {:?}", r);
 				r
 			}
 			Err(e)=>{

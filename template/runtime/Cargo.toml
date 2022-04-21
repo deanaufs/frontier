@@ -41,7 +41,7 @@ pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "..
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/transaction-payment/rpc/runtime-api/" }
 
-pallet-aufs = { version = "4.0.0-dev", default-features = false, path = "../../frame/aufs" }
+pallet-evm-acl = { version = "4.0.0-dev", default-features = false, path = "../../frame/evm-acl" }
 # pallet-aura = { default-features = false, git = "https://github.com/paritytech/substrate" }
 # pallet-balances = { default-features = false, git = "https://github.com/paritytech/substrate" }
 # pallet-grandpa = { default-features = false, git = "https://github.com/paritytech/substrate" }
@@ -109,7 +109,7 @@ std = [
 	"fp-self-contained/std",
 
 	"pallet-ethereum/std",
-	"pallet-aufs/std",
+	"pallet-evm-acl/std",
 	"pallet-evm/std",
 	"pallet-dynamic-fee/std",
 	"pallet-evm-precompile-simple/std",

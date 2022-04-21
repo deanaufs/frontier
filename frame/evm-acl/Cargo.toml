@@ -1,5 +1,5 @@
 [package]
-name = "pallet-aufs"
+name = "pallet-evm-acl"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -19,7 +19,9 @@ sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primiti
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+ethabi = { version = "15.0.0", default-features = false }
 log = "0.4.8"
+# web3 = { version = "0.18.0", default-features = false }
 
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
@@ -35,5 +37,6 @@ std = [
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
+	"ethabi/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

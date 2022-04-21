@@ -995,6 +995,7 @@ mod tests {
 		testing::TaskExecutor,
 		traits::{CodeExecutor, Externalities, RuntimeCode},
 		NativeOrEncoded, NeverNativeValue,
+		Hasher,
 	};
 	use sp_runtime::traits::BlakeTwo256;
 	use std::{
@@ -1002,6 +1003,7 @@ mod tests {
 		panic::UnwindSafe,
 		result,
 	};
+	use hex_literal::hex;
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
@@ -1513,6 +1515,44 @@ mod tests {
 	}
 
 	#[test]
+	fn rpc_proof_check(){
+		// let remote_backend = trie_backend::tests::test_trie();
+		// let mut remote_root = remote_backend.storage_root(std::iter::empty()).0;
+
+		let plain_hash = hex!("41bcaeac6241e5c52c0b3919e8ed95fac2dc7eb2fd62c44142567211fc7db3b8");
+		let remote_proof = StorageProof::new(
+			 vec![
+				hex!("9e0d1176a568c1f92944340dbfed9e9c3000505f0e7b9012096b41c4eb3aaf947f6ea429080000801f98c9eb66fcca07dfbdd28d0b7a68b9ec24eae102d7bb394f2b88a61420410e").to_vec(),
+				hex!("80809080277266f06bf0fde85046b5867a230023798b366d27ed95a9d9b07d7f41d8b96980140b4b9148bc2e03a7f8a4c223a70dc7e7984871cfea135d844e15126336a11e800765a4a3238ce7663f9547a4b3e59fb1683dac09d3a81f8955e37b4b649e0543").to_vec(),
+				hex!("5f030ebca703c85910e7164cb7d1c9e47b80d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d").to_vec(),
+				hex!("802e9a805023821239027c0816afd4ac1321fd15763e8488eabd01832ee60552f9b5f8048029e07d99bad6d30759ebefeb5ef6c6fad47fb8fbfecd3b43e483c3fde6218fa88002976a6a7613f696414c889f011e0775c20a8ff10bfb3cb46747cdc081d7c97180c233a6a1d1c2e3d358bcaf637d2f3adb32c84500c31709bf03c92e27f07e26958033ad2c194513b8ced6b749c8b5b1375552afb6b7b1f90369f562b8360c56b7838094dda19393bf0e9fde2b5c976912fce45a7090e003b88fa39f9161a84fb4d7048097b467e22893fddfedf13d220a4788cf8b86802c79733b73d2a19f54f33ede198074559123c2e959b5989d70aeeb8048b1ca677f880e3884be1b8696adc08b2ed0").to_vec(),
+			]
+		);
+
+		// let items = vec![(test_key, Some(test_value))];
+		let mut remote_root = <BlakeTwo256 as Hasher>::Out::default();
+		remote_root.as_mut().copy_from_slice(&plain_hash);
+
+		let test_key = hex!("5c0d1176a568c1f92944340dbfed9e9c530ebca703c85910e7164cb7d1c9e47b");
+		let result_map =
+			read_proof_check::<BlakeTwo256, _>(remote_root, remote_proof.clone(), &[test_key])
+				.unwrap();
+		
+		result_map.iter().for_each(|(k,v)|{
+			let k_str = k.iter().map(|b|format!("{:02x}", b)).collect::<Vec<_>>().join("");
+			if let Some(b_vec) = v{
+				let v_str = b_vec.iter().map(|b|format!("{:02x}", b)).collect::<Vec<_>>().join("");
+				println!("0x{}: Some(0x{})", k_str, v_str);
+			}
+			else{
+				println!("0x{}: None", k_str);
+			}
+		});
+		// let test_value = DBValue::from(hex!("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"));
+		// println!("{:?}", local_result1);
+	}
+
+	#[test]
 	fn prove_read_and_proof_check_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let missing_child_info = ChildInfo::new_default(b"sub1sub2"); // key will include other child root to proof.
@@ -1525,13 +1565,22 @@ mod tests {
 
 		// remote_root: 0x7d5d935fc1b525ffa8a647e87cb228f1b8a97c5a129149de52b0344b17fa69fc
 		let remote_root = remote_backend.storage_root(std::iter::empty()).0;
+
+		// let proof = sp_trie::generate_trie_proof(&remote_backend.0, remote_backend.1, &[b"value2"]);
+
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
+		// println!("proof: {:?}", remote_proof);
 		let remote_proof = test_compact(remote_proof, &remote_root);
+		// println!("compact: {:?}", remote_proof);
+
+		println!("{:?}", remote_root);
+		println!("{:?}", remote_proof);
 
 		// check proof locally
 		let local_result1 =
 			read_proof_check::<BlakeTwo256, _>(remote_root, remote_proof.clone(), &[b"value2"])
 				.unwrap();
+		println!("{:?}", local_result1);
 
 		let local_result2 =
 			read_proof_check::<BlakeTwo256, _>(remote_root, remote_proof.clone(), &[&[0xff]])

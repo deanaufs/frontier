@@ -131,7 +131,7 @@ impl<T: Config> Runner<T> {
 			} else {
 				(executor.fee(base_fee), None)
 			};
-		log::debug!(
+		log::info!(
 			target: "evm",
 			"Execution {:?} [source: {:?}, value: {}, gas_limit: {}, actual_fee: {}]",
 			reason,

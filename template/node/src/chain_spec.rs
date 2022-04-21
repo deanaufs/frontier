@@ -1,6 +1,7 @@
 use frontier_template_runtime::{
-	AccountId, AuraConfig, BalancesConfig, EVMConfig, EthereumConfig, AufsConfig, GenesisConfig, GrandpaConfig,
+	AccountId, AuraConfig, BalancesConfig, EVMConfig, EthereumConfig, GenesisConfig, GrandpaConfig,
 	Signature, SudoConfig, SystemConfig, WASM_BINARY,
+	EvmAclConfig,
 };
 use sc_service::ChainType;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -232,12 +233,24 @@ fn testnet_genesis(
 						storage: Default::default(),
 					},
 				);
+				map.insert(
+					// H160 address of CI test runner account
+					H160::from_str("f89f0efc01bfbbefee49a28519461afabf21ded0")
+						.expect("internal H160 is valid; qed"),
+					pallet_evm::GenesisAccount {
+						balance: U256::from_str("0x56bc75e2d63100000")
+							.expect("internal U256 is valid; qed"),
+						code: Default::default(),
+						nonce: Default::default(),
+						storage: Default::default(),
+					},
+				);
 
 				map
 			},
 		},
 		ethereum: EthereumConfig {},
-		aufs: AufsConfig {},
+		evm_acl: EvmAclConfig {},
 		// aufs: Default::default(),
 		dynamic_fee: Default::default(),
 		base_fee: Default::default(),

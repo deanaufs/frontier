@@ -22,7 +22,7 @@ use crate::IntermediateStateRoot;
 use codec::{WrapperTypeDecode, WrapperTypeEncode};
 use ethereum::{TransactionAction, TransactionSignature};
 use frame_support::{parameter_types, traits::FindAuthor, ConsensusEngineId, PalletId};
-use pallet_evm::{AddressMapping, EnsureAddressTruncated, FeeCalculator};
+use pallet_evm::{ACLManager, AddressMapping, EnsureAddressTruncated, FeeCalculator};
 use rlp::*;
 use sha3::Digest;
 use sp_core::{H160, H256, U256};
@@ -48,6 +48,8 @@ frame_support::construct_runtime! {
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage},
 		EVM: pallet_evm::{Pallet, Call, Storage, Config, Event<T>},
 		Ethereum: crate::{Pallet, Call, Storage, Event, Origin},
+
+		EvmAcl: pallet_evm_acl::{Pallet, Storage, Config},
 	}
 }
 
@@ -102,6 +104,8 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = ();
 }
 
+impl pallet_evm_acl::Config for Test {}
+
 parameter_types! {
 	pub const MinimumPeriod: u64 = 6000 / 2;
 }
@@ -119,6 +123,24 @@ impl FeeCalculator for FixedGasPrice {
 		1.into()
 	}
 }
+
+// pub struct EvmAcl;
+// impl ACLManager for EvmAcl{
+// 	fn parse_log(source: H160, log: Log) {
+// 		// let log_str = log.data.iter().map(|v|format!("{}", v)).collect::<Vec<_>>().join("");
+// 		// log::info!("log: 0x{}", log_str);
+// 		// log::info!("Acl pasrse_log: {}", log)
+// 		log::info!("Caller: {:?}", source);
+// 		log::info!(
+// 			"Contract: {:?}, topics ({}) {:?}, data ({}): {:?}]",
+// 			log.address,
+// 			log.topics.len(),
+// 			log.topics,
+// 			log.data.len(),
+// 			log.data
+// 		);
+// 	}
+// }
 
 pub struct FindAuthorTruncated;
 impl FindAuthor<H160> for FindAuthorTruncated {
@@ -148,6 +170,7 @@ impl AddressMapping<AccountId32> for HashedAddressMapping {
 }
 
 impl pallet_evm::Config for Test {
+	type ACLManager = EvmAcl;
 	type FeeCalculator = FixedGasPrice;
 	type GasWeightMapping = ();
 	type CallOrigin = EnsureAddressTruncated;

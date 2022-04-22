@@ -104,6 +104,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_timestamp::Config {
+		type ACLManager: ACLManager;
 		/// Calculator for current gas price.
 		type FeeCalculator: FeeCalculator;
 
@@ -418,6 +419,21 @@ pub mod pallet {
 	#[pallet::getter(fn account_storages)]
 	pub type AccountStorages<T: Config> =
 		StorageDoubleMap<_, Blake2_128Concat, H160, Blake2_128Concat, H256, H256, ValueQuery>;
+	
+	// #[pallet::hooks]
+	// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	// 	fn on_initialize(block_number: T::BlockNumber) -> Weight {
+	// 		// if block_number == T::BlockNumber::from(3u32){
+	// 		// 	// if let Err(e) = Self::update_storage(){
+	// 		// 	// 	log::info!("update uri failed: {}", e);
+	// 		// 	// }
+	// 		// 	<Value<T>>::put(77);
+	// 		// }
+	// 		T::ACLManager::parse_log(block_number.encode());
+
+	// 		T::DbWeight::get().reads_writes(0, 0)
+	// 	}
+	// }
 }
 
 /// Type alias for currency balance.
@@ -438,6 +454,14 @@ impl FeeCalculator for () {
 	fn min_gas_price() -> U256 {
 		U256::zero()
 	}
+}
+
+pub trait ACLManager {
+	fn parse_log(source: H160, log: Log);
+}
+
+impl ACLManager for () {
+	fn parse_log(_source: H160, _log: Log){}
 }
 
 pub trait EnsureAddressOrigin<OuterOrigin> {

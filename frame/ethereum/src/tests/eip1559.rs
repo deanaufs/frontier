@@ -19,6 +19,11 @@
 
 use super::*;
 
+use std::io::Write;
+use chrono::Local;
+use env_logger::Builder;
+use log::LevelFilter;
+
 fn eip1559_erc20_creation_unsigned_transaction() -> EIP1559UnsignedTransaction {
 	EIP1559UnsignedTransaction {
 		nonce: U256::zero(),
@@ -163,6 +168,38 @@ fn transaction_with_invalid_chain_id_should_fail_in_block() {
 				crate::TransactionValidationError::InvalidChainId as u8,
 			))
 		);
+	});
+}
+
+#[test]
+fn user_contract_test(){
+	Builder::new()
+		.format(|buf, record| {
+			writeln!(buf,
+				"{} [{}] - {}",
+				Local::now().format("%H:%M:%S"),
+				record.level(),
+				record.args()
+			)
+		})
+		.filter(None, LevelFilter::Info)
+		.init();
+
+	let (pairs, mut ext) = new_test_ext(1);
+	let alice = &pairs[0];
+	let erc20_address = contract_address(alice.address, 0);
+	let alice_storage_address = storage_address(alice.address, H256::zero());
+
+	ext.execute_with(|| {
+		let t = eip1559_erc20_creation_transaction(alice);
+		// log::info!("{:?}", t);
+
+		assert_ok!(Ethereum::execute(alice.address, &t, None,));
+		assert_eq!(
+			EVM::account_storages(erc20_address, alice_storage_address),
+			H256::from_str("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+				.unwrap()
+		)
 	});
 }
 

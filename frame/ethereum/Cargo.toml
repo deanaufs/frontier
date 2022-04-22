@@ -15,6 +15,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
+pallet-evm-acl = { version = "4.0.0-dev", default-features = false, path = "../../frame/evm-acl" }
 # frame-support = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate" }
 # frame-system = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate" }
 # pallet-balances = { version = "4.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate" }
@@ -46,6 +47,8 @@ log = "0.4.8"
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 # sp-core = { version = "4.0.0-dev", git = "https://github.com/paritytech/substrate" }
 libsecp256k1 = { version = "0.5", features = ["static-context", "hmac"] }
+chrono = "0.4.8"
+env_logger = "0.9.0"
 
 [features]
 default = ["std"]
@@ -62,6 +65,7 @@ std = [
 	"frame-system/std",
 	"pallet-balances/std",
 	"pallet-timestamp/std",
+	"pallet-evm-acl/std",
 	"pallet-evm/std",
 	"sp-io/std",
 	"sp-std/std",

@@ -9,7 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use codec::{Decode, Encode};
-use pallet_evm::FeeCalculator;
+use pallet_evm::{FeeCalculator, ACLManager};
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -302,6 +302,7 @@ parameter_types! {
 }
 
 impl pallet_evm::Config for Runtime {
+	type ACLManager = EvmAcl;
 	type FeeCalculator = BaseFee;
 	type GasWeightMapping = ();
 	type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;

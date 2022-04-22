@@ -20,12 +20,19 @@ sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../pr
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 ethabi = { version = "15.0.0", default-features = false }
+pallet-evm = { path = "../evm", default-features = false }
+sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+fp-evm = { version = "3.0.0-dev", default-features = false, path = "../../primitives/evm" }
+sha3 = { version = "0.8", default-features = false }
 log = "0.4.8"
-# web3 = { version = "0.18.0", default-features = false }
+hex-literal = "0.3.1"
 
 [dev-dependencies]
 sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+env_logger = "0.9"
+chrono = "0.4.8"
+
 
 [features]
 default = ["std"]
@@ -38,5 +45,9 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"ethabi/std",
+	"pallet-evm/std",
+	"sp-core/std",
+	"fp-evm/std",
+	"sha3/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

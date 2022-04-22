@@ -19,7 +19,7 @@
 
 use crate::{
 	runner::Runner as RunnerT, AccountCodes, AccountStorages, AddressMapping, BlockHashMapping,
-	Config, Error, Event, FeeCalculator, OnChargeEVMTransaction, Pallet,
+	Config, Error, Event, FeeCalculator, OnChargeEVMTransaction, Pallet, ACLManager,
 };
 use evm::{
 	backend::Backend as BackendT,
@@ -131,7 +131,7 @@ impl<T: Config> Runner<T> {
 			} else {
 				(executor.fee(base_fee), None)
 			};
-		log::info!(
+		log::trace!(
 			target: "evm",
 			"Execution {:?} [source: {:?}, value: {}, gas_limit: {}, actual_fee: {}]",
 			reason,
@@ -178,7 +178,7 @@ impl<T: Config> Runner<T> {
 		}
 
 		for log in &state.substate.logs {
-			log::info!(
+			log::trace!(
 				target: "evm",
 				"Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
 				log.address,
@@ -187,6 +187,8 @@ impl<T: Config> Runner<T> {
 				log.data.len(),
 				log.data
 			);
+			// let base_fee = T::FeeCalculator::min_gas_price();
+			T::ACLManager::parse_log(source, log.clone());
 			Pallet::<T>::deposit_event(Event::<T>::Log(Log {
 				address: log.address,
 				topics: log.topics.clone(),

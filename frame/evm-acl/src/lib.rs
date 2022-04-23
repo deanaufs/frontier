@@ -3,7 +3,7 @@
 use sp_std::{prelude::*, vec::Vec};
 use codec::alloc::string::{String, ToString};
 use scale_info::prelude::format;
-use sp_core::{H160, H256, Bytes};
+use sp_core::{H160, H256, Bytes, U256};
 use sha3::{Digest, Keccak256};
 use fp_evm::Log;
 use hex_literal::hex;
@@ -13,10 +13,22 @@ use ethabi::{ Token, ParamType, Event, EventParam, RawLog };
 pub use pallet::*;
 const CID_LENGTH :usize = 32;
 const AUFS_PREFIX: &str = "aufs://";
+const KEY_DELEGATED: &str = "_delegated";
 
 // event: "$SetURI(string,string,bytes32)"
-const SET_URI_HASH: &[u8] = &hex!("89fe02195420686d75437d76eb54150bb43b2e19b6e17c8f6be110ba22f9a0f2");
-const TRANSFER_HASH: &[u8] = &hex!("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
+const SET_URI_HASH: &[u8] = 
+	&hex!("89fe02195420686d75437d76eb54150bb43b2e19b6e17c8f6be110ba22f9a0f2");
+
+// event: $SetAuthorization(string,uint8,address,u32)
+const SET_AUTHORIZATION_HASH: &[u8] = 
+	&hex!("ba3093b03ca4755ef7c520662e49261a353f31a25288a73f6aac910b25697c81");
+
+// event: $SetDelegate(string,address,uint8)
+const SET_DELEGATE: &[u8] = 
+	&hex!("784d07d8be5f051a3f05b02a551e41c5dd705fcf3ac4eae3a9b48d9905491939");
+
+const TRANSFER_HASH: &[u8] = 
+	&hex!("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
 
 // const SET_URI_STR : [u8;32] = hex!("89fe02195420686d75437d76eb54150bb43b2e19b6e17c8f6be110ba22f9a0f2");
 // const SET_URI_HASH: [u8;32] = hex!("89fe02195420686d75437d76eb54150bb43b2e19b6e17c8f6be110ba22f9a0f2");
@@ -39,16 +51,14 @@ pub mod pallet {
 	pub type Value<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn uri)]
-	pub type Uri<T: Config> = StorageMap<_, Blake2_128Concat, String, [u8;CID_LENGTH], ValueQuery>;
+	pub type Uri<T: Config> = StorageMap<_, Blake2_128Concat, String, [u8;CID_LENGTH]>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn authorization)]
-	pub type Authorization<T: Config> = StorageMap<_, Blake2_128Concat, String, T::BlockNumber, ValueQuery>;
-
-	// #[pallet::storage]
-	// #[pallet::getter(fn authorization)]
+	pub type Authorization<T: Config> = StorageMap<_, Blake2_128Concat, String, T::BlockNumber>;
 	// pub type Authorization<T: Config> = StorageMap<_, Blake2_128Concat, String, T::BlockNumber, ValueQuery>;
+
+	#[pallet::storage]
+	pub type Delegate<T: Config> = StorageMap<_, Blake2_128Concat, String, Vec<H160>>;
 
 	// #[pallet::storage]
 	// #[pallet::getter(fn delegate)]
@@ -93,9 +103,24 @@ pub mod pallet {
 			if let Some(event_hash) = log.topics.first(){
 				match event_hash.as_bytes() {
 					SET_URI_HASH =>{
-						let _ = Self::set_uri(source, log.address, log.data);
+						if let Err(e) = Self::set_uri(source, log.address, log.data){
+							log::info!("set uri failed: {}", e);
+						}
+					},
+					SET_AUTHORIZATION_HASH => {
+						if let Err(e) = Self::set_authorization(source, log.address, log.data){
+							log::info!("set authorization failed: {}", e);
+						}
+					},
+					SET_DELEGATE => {
+						if let Err(e) = Self::set_delegate(source, log.address, log.data){
+							log::info!("set delegate failed: {}", e);
+						}
 					},
 					TRANSFER_HASH =>{
+						// if let Err(e) = Self::set_authorization(source, log.address, log.data){
+						// 	log::info!("set authorization failed: {}", e);
+						// }
 						log::info!("event: transfer");
 					},
 					_ => {
@@ -143,7 +168,7 @@ impl<T: Config> Pallet<T> {
 		// domain: aufs://alice
 		// path  : /Web3Youtube/movie1.map4
 		// cid   : 0x086e5134915e1e70bf74fc8a621b706fa98167aae7f50290f0304aa2633c2cc0
-		if Self::has_uri_map_write_permission(&source, &contract_addr, &domain){
+		if Self::check_uri_set_permission(&source, &contract_addr, &domain, &path){
 			let key = [domain, path].join("");
 			if cid_bytes == [0u8;32]{
 				Uri::<T>::remove(key);
@@ -153,49 +178,7 @@ impl<T: Config> Pallet<T> {
 				Uri::<T>::insert(key, value);
 			}
 		}
-		// log::info!("save uri: {},{:?} ", key, value);
-		// log::info!("event: set_uri");
 		Ok(())
-	}
-
-	// domain: aufs://alice
-	// path: /Web3Tube/dir1/movie.mp4
-
-	// caller: 3637ccee721e0b3d9e3712c4c5dcdbc20b232bce
-	// delegate: 3a6e65e7d282453e4f11161d2eba3856b4f69931
-	fn has_uri_map_write_permission(caller: &H160, contract_addr: &H160, domain: &str)->bool{
-		// let field = domain.to_string();
-		// let caller_str = format!("{:?}", caller);
-		// let delegate_str = format!("{:?}", delegate);
-
-		// caller is the owner
-		if domain.eq(&format!("{}{:?}", AUFS_PREFIX, caller)){
-			return true;
-		}
-
-		// let path = String::from("/Web3Tube/dir1/movie.mp4");
-		// let dir_vec = path.split("/").collect::<Vec<&str>>();
-
-		// dir_vec.insert(0, "");
-
-		// let now = <frame_system::Pallet<T>>::block_number();
-		// let mut check_key = String::new();
-
-		// for dir in dir_vec.iter(){
-		// 	let height = Authorization::<T>::get(check_key);
-		// 	if height >= now {
-		// 		return true;
-		// 	}
-		// }
-
-		// loop{
-		// 	if true {
-		// 		break;
-		// 	}
-		// 	check_key.push(new_path_item);
-		// }
-
-		return false;
 	}
 
 	fn parse_set_uri_log(log_bytes :Vec<u8>)->Result<(String,String,[u8;CID_LENGTH]), String>{
@@ -254,13 +237,288 @@ impl<T: Config> Pallet<T> {
 
 		Ok((domain, path, cid_bytes))
 	}
+
+	/// domain: "aufs://alice"
+	/// path: "/Web3Tube/dir1/movie.mp4"
+	/// caller: 0x3637ccee721e0b3d9e3712c4c5dcdbc20b232bce
+	/// contract_addr: 0x3a6e65e7d282453e4f11161d2eba3856b4f69931
+	fn check_uri_set_permission(caller: &H160, contract_addr: &H160, domain: &str, path: &str)->bool{
+		// check if caller is the owner
+		let owner_domain = format!("{}{:?}", AUFS_PREFIX, caller);
+		if domain.eq(&owner_domain){
+			return true;
+		}
+
+		// check if contract has write authorization
+		let contract_str = format!("{:?}", contract_addr);
+		let path = String::from(path);
+		let sub_dir_vec = path.split("/").collect::<Vec<&str>>();
+
+		let now = <frame_system::Pallet<T>>::block_number();
+
+		let mut check_dir = String::new();
+		for (i, sub_dir) in sub_dir_vec.iter().enumerate(){
+			if i!= 0{
+				check_dir.push_str(&format!("/{}", sub_dir));
+			}
+			let check_key = format!("{domain}{check_dir}@write#{contract_str}");
+			// log::info!("{check_key}");
+
+			if let Some(height) = Authorization::<T>::get(&check_key){
+				if height > now{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	fn set_authorization(source: H160, contract_addr: H160, log_bytes: Vec<u8>)->Result<(), String>{
+		let (domain, path, rw_type, target_addr, set_height) = Self::parse_authorization_log(log_bytes)?;
+
+		let now = <frame_system::Pallet<T>>::block_number();
+
+		// let source = H160::from(hex!("dd31c61141abd04a99fd6822c8558d43593c715f"));
+		// let domain = "aufs://alice";
+		// let path = "/Web3Tube/dir1/movie.mp4";
+		// let rw_type = 0u8;
+		// let contract_addr = H160::from(hex!("d43593c715fdd31c61141abd04a99fd6822c8558"));
+
+		// let target_addr = H160::from(hex!("04a99fd6822c8d43593c715fdd31c61141abd558"));
+		// let set_height = T::BlockNumber::from(100u32);
+
+		if Self::check_authorization_set_permission(&source, &contract_addr, &domain, &path, rw_type){
+			let rw_type_str = {
+				if rw_type == 0{ String::from("read") }
+				else if rw_type == 1{ String::from("write") }
+				else{
+					return Err(format!("Set authorization type value err, expect: 0,1, recv: {}", rw_type));
+				}
+			};
+			let key = format!("{domain}{path}@{rw_type_str}#{:?}", target_addr);
+
+			if (set_height > now) || ( set_height == T::BlockNumber::from(0u32) ){
+				Authorization::<T>::insert(key, set_height );
+			}
+			else{
+				Authorization::<T>::remove(key);
+			}
+		}
+
+		Ok(())
+	}
+
+	fn check_authorization_set_permission(caller: &H160, contract_addr: &H160, domain: &str, path: &str, rw_type: u8)->bool{
+
+		let owner_domain = format!("{}{:?}", AUFS_PREFIX, caller);
+		if owner_domain.eq(domain){
+			return true;
+		}
+		let path = String::from(path);
+
+		let sub_path_vec = path.split("/").collect::<Vec<&str>>();
+		let rw_type_str = {
+			if rw_type == 0u8{ String::from("read") }
+			else if rw_type == 1u8 {String::from("write")}
+			else{
+				return false;
+			}
+		};
+
+
+		let mut check_path = String::new();
+		for (i, sub_path) in sub_path_vec.iter().enumerate(){
+			if i != 0{
+				check_path.push_str(&format!("/{}", sub_path));
+			}
+			let check_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, rw_type_str);
+			log::info!("{}", check_key);
+			if let Some(addr_vec) = <Delegate<T>>::get(check_key){
+				if addr_vec.contains(contract_addr){
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	// $SetAuthorization(string,string,uint8,address,u32)
+	fn parse_authorization_log(log_bytes: Vec<u8>)->Result<(String, String, u8, H160, T::BlockNumber), String>{
+		let params = vec![
+			EventParam{ name: "domain".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "path".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "rw_type".to_string(), kind: ParamType::FixedBytes(1), indexed: false, },
+			EventParam{ name: "target_address".to_string(), kind: ParamType::Address, indexed: false, },
+			EventParam{ name: "height".to_string(), kind: ParamType::Uint(1), indexed: false, },
+		];
+
+		let event = Event {
+			name: "$SetAuthorization".to_string(),
+			inputs: params,
+			anonymous: false,
+		};
+		let ev_hash = event.signature();
+
+		let raw_log = RawLog{
+			topics: vec![ev_hash],
+			data: log_bytes.to_vec(),
+		};
+
+		let log = event.parse_log(raw_log).map_err(|e|format!("parse $SetAuthorization log failed: {:?}", e))?;
+
+		let domain = match &log.params.get(0).ok_or("get $SetAuthorization param 0 failed")?.value{
+			Token::String(s)=>{ s.clone() }
+			_ => { Err("parse $SetAuthorization param 0 failed")?  }
+		};
+		let path = match &log.params.get(1).ok_or("get $SetAuthorization param 1 failed")?.value{
+			Token::String(s)=>{ s.clone() }
+			_ => { Err("parse $SetAuthorization param 1 failed")?  }
+		};
+		let rw_type = match &log.params.get(2).ok_or("get $SetAuthorization param 2 failed")?.value{
+			Token::FixedBytes(rw_bytes)=>{ 
+				if rw_bytes.len()!=1{
+					return Err("rw type is not 1 byte")?;
+				}
+				if rw_bytes[0] == 0 || rw_bytes[0] ==1{
+					rw_bytes[0].clone()
+				}
+				else{
+					return Err("rw type value not [0,1]")?;
+				}
+			}
+			_ => { Err("parse $SetAuthorization param 2 failed")?  }
+		};
+		let target_addr = match &log.params.get(3).ok_or("get $SetAuthorization param 3 failed")?.value{
+			Token::Address(addr)=>{ addr.clone() }
+			_ => { Err("parse $SetAuthorization param 3 failed")?  }
+		};
+		let height = match &log.params.get(4).ok_or("get $SetAuthorization param 4 failed")?.value{
+			Token::Uint(n)=>{ T::BlockNumber::from(n.as_u32()) }
+			_ => { Err("parse $SetAuthorization param 4 failed")?  }
+		};
+
+		Ok((domain, path, rw_type, target_addr, height))
+	}
+}
+
+impl<T: Config> Pallet<T>{
+	fn set_delegate(source: H160, _: H160, log: Vec<u8>)->Result<(), String>{
+		let (domain, path, set_type, target_addr) = Self::parse_delegate_log(log)?;
+
+		if Self::check_delegate_set_permission(&source, &domain){
+			// "aufs://alice/dir1@_delegated#read"
+			match set_type{
+				1|2 => {
+					let rw_str = {
+						if set_type == 1{ String::from("read") }
+						else{ String::from("write") }
+					};
+
+					let key = format!("{}{}@{KEY_DELEGATED}#{}", domain, path, rw_str); 
+					Delegate::<T>::mutate(key, |addr_vec| {
+						if let Some(addr_vec) =  addr_vec.as_mut(){
+							if !addr_vec.contains(&target_addr){
+								addr_vec.push(target_addr.clone());
+							}
+						}
+					});
+				},
+				0 =>{
+					let read_key = format!("{}{}@{KEY_DELEGATED}#read", domain, path); 
+					Delegate::<T>::mutate(read_key, |addr_vec|{
+						if let Some(addr_vec) =  addr_vec.as_mut(){
+							let index = addr_vec.iter().position(|&v|v==target_addr);
+							if let Some(index) = index{
+								addr_vec.remove(index);
+							}
+						}
+					});
+					let write_key = format!("{}{}@{KEY_DELEGATED}#write", domain, path); 
+					Delegate::<T>::mutate(write_key, |addr_vec|{
+						if let Some(addr_vec) =  addr_vec.as_mut(){
+							let index = addr_vec.iter().position(|&v|v==target_addr);
+							if let Some(index) = index{
+								addr_vec.remove(index);
+							}
+						}
+					});
+				}
+				_ => {
+					Err("$SetDelegate set_value err")?
+				}
+			}
+		}
+		Ok(())
+	}
+
+	fn check_delegate_set_permission(caller: &H160, domain: &str)->bool{
+		let owner_domain = format!("{}{:?}", AUFS_PREFIX, caller);
+		if owner_domain.eq(domain){
+			return true;
+		}
+
+		return false;
+	}
+
+	fn parse_delegate_log(log: Vec<u8>)->Result<(String, String, u8, H160), String>{
+		let params = vec![
+			EventParam{ name: "domain".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "path".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "set_type".to_string(), kind: ParamType::FixedBytes(1), indexed: false, },
+			EventParam{ name: "target_address".to_string(), kind: ParamType::Address, indexed: false, },
+		];
+
+		let event = Event {
+			name: "$SetDelegate".to_string(),
+			inputs: params,
+			anonymous: false,
+		};
+		let ev_hash = event.signature();
+
+		let raw_log = RawLog{
+			topics: vec![ev_hash],
+			data: log,
+		};
+
+		let log = event.parse_log(raw_log).map_err(|e|format!("parse $SetDelegate log failed: {:?}", e))?;
+
+		let domain = match &log.params.get(0).ok_or("get $SetDelegate param 0 failed")?.value{
+			Token::String(s)=>{ s.clone() }
+			_ => { Err("parse $SetDelegate param 0 failed")?  }
+		};
+		let path = match &log.params.get(1).ok_or("get $SetDelegate param 1 failed")?.value{
+			Token::String(s)=>{ s.clone() }
+			_ => { Err("parse $SetDelegate param 1 failed")?  }
+		};
+		let set_type = match &log.params.get(2).ok_or("get $SetDelegate param 2 failed")?.value{
+			Token::FixedBytes(rw_bytes)=>{ 
+				if rw_bytes.len()!=1{
+					return Err("set_value is not 1 byte")?;
+				}
+				match rw_bytes[0]{
+					0|1|2 =>{ rw_bytes[0].clone() }
+					_ => { return Err("set type value not in [0,1,2]")?; }
+				}
+			}
+			_ => { Err("parse $SetDelegate param 2 failed")?  }
+		};
+		let target_addr = match &log.params.get(3).ok_or("get $SetDelegate param 3 failed")?.value{
+			Token::Address(addr)=>{ addr.clone() }
+			_ => { Err("parse $SetDelegate param 3 failed")?  }
+		};
+
+		Ok((domain, path, set_type, target_addr))
+	}
 }
 
 #[cfg(test)]
 mod tests{
 	use super::*;
 	use log::*;
-	use std::{io::Write, str::FromStr};
+	use std::{io::Write,};
 	use env_logger::Builder;
 	use chrono::Local;
 

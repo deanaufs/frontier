@@ -195,27 +195,14 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn parse_set_uri_log(log_bytes :Vec<u8>)->Result<(String,String,[u8;CID_LENGTH]), String>{
-		let params = vec![
-			EventParam{ name: "domain".to_string(), kind: ParamType::String, indexed: false, },
-			EventParam{ name: "path".to_string(), kind: ParamType::String, indexed: false, },
-			EventParam{ name: "cid".to_string(), kind: ParamType::FixedBytes(32), indexed: false, },
+		let params_type = [
+			ParamType::String,
+			ParamType::String,
+			ParamType::FixedBytes(32),
 		];
+		let params = ethabi::decode(&params_type, &log_bytes).map_err(|e|format!("decode failed: {}", e))?;
 
-		let event = Event {
-			name: "$SetURI".to_string(),
-			inputs: params,
-			anonymous: false,
-		};
-		let ev_hash = event.signature();
-
-		let raw_log = RawLog{
-			topics: vec![ev_hash],
-			data: log_bytes.to_vec(),
-		};
-
-		let log = event.parse_log(raw_log).map_err(|e|format!("parse log failed: {:?}", e))?;
-
-		let domain = match &log.params.get(0).ok_or("get param domain failed")?.value{
+		let domain = match &params.get(0).ok_or("get param domain failed")?{
 			Token::String(s)=>{
 				s.clone()
 			}
@@ -224,7 +211,7 @@ impl<T: Config> Pallet<T> {
 			}
 		};
 
-		let path = match &log.params.get(1).ok_or("get param path failed")?.value{
+		let path = match &params.get(1).ok_or("get param path failed")?{
 			Token::String(s)=>{
 				s.clone()
 			}
@@ -233,7 +220,7 @@ impl<T: Config> Pallet<T> {
 			}
 		};
 
-		let cid_bytes = match &log.params.get(2).ok_or("get param cid failed")?.value{
+		let cid_bytes = match &params.get(2).ok_or("get param cid failed")?{
 			Token::FixedBytes(fixed_bytes)=>{
 				if fixed_bytes.len() != CID_LENGTH{
 					return Err("cid not 32 bytes")?;
@@ -384,51 +371,24 @@ impl<T: Config> Pallet<T> {
 
 	// $SetAuthorization(string,string,uint8,address,u32)
 	fn parse_authorization_log(log_bytes: Vec<u8>)->Result<(String, String, u8, H160, T::BlockNumber), String>{
-		let params = vec![
-			EventParam{ name: "domain".to_string(), kind: ParamType::String, indexed: false, },
-			EventParam{ name: "path".to_string(), kind: ParamType::String, indexed: false, },
-			EventParam{ name: "rw_type".to_string(), kind: ParamType::Uint(1), indexed: false, },
-			EventParam{ name: "target_address".to_string(), kind: ParamType::Address, indexed: false, },
-			EventParam{ name: "height".to_string(), kind: ParamType::Uint(1), indexed: false, },
+		let params_type = [
+			ParamType::String,
+			ParamType::String,
+			ParamType::Uint(1),
+			ParamType::Address,
+			ParamType::Uint(1),
 		];
+		let params = ethabi::decode(&params_type, &log_bytes).map_err(|e|format!("pasre log failed: {}", e))?;
 
-		let event = Event {
-			name: "$SetAuthorization".to_string(),
-			inputs: params,
-			anonymous: false,
-		};
-		let ev_hash = event.signature();
-
-		let raw_log = RawLog{
-			topics: vec![ev_hash],
-			data: log_bytes.to_vec(),
-		};
-
-		let log = event.parse_log(raw_log).map_err(|e|format!("parse log failed: {:?}", e))?;
-
-		let domain = match &log.params.get(0).ok_or("get param domain failed")?.value{
+		let domain = match &params.get(0).ok_or("get param domain failed")?{
 			Token::String(s)=>{ s.clone() }
 			_ => { Err("parse param domain failed")?  }
 		};
-		let path = match &log.params.get(1).ok_or("get param path failed")?.value{
+		let path = match &params.get(1).ok_or("get param path failed")?{
 			Token::String(s)=>{ s.clone() }
 			_ => { Err("parse param path failed")?  }
 		};
-		// let rw_type = match &log.params.get(2).ok_or("get param rw_type failed")?.value{
-		// 	Token::FixedBytes(rw_bytes)=>{ 
-		// 		if rw_bytes.len()!=1{
-		// 			return Err("rw_type's size is not 1 byte")?;
-		// 		}
-		// 		if rw_bytes[0] == SET_READ || rw_bytes[0] == SET_WRITE {
-		// 			rw_bytes[0].clone()
-		// 		}
-		// 		else{
-		// 			return Err("unexpected rw type value")?;
-		// 		}
-		// 	}
-		// 	_ => { Err("parse param rw_type failed")?  }
-		// };
-		let rw_type = match &log.params.get(2).ok_or("get param rw_type failed")?.value{
+		let rw_type = match &params.get(2).ok_or("get param rw_type failed")?{
 			Token::Uint(n)=>{
 				if n == &U256::from(SET_READ){
 					SET_READ
@@ -444,11 +404,11 @@ impl<T: Config> Pallet<T> {
 				Err("parse param rw_type failed")?
 			}
 		};
-		let target_addr = match &log.params.get(3).ok_or("get param target_address failed")?.value{
+		let target_addr = match &params.get(3).ok_or("get param target_address failed")?{
 			Token::Address(addr)=>{ addr.clone() }
 			_ => { Err("parse param target_address failed")?  }
 		};
-		let height = match &log.params.get(4).ok_or("get param height failed")?.value{
+		let height = match &params.get(4).ok_or("get param height failed")?{
 			Token::Uint(n)=>{ T::BlockNumber::from(n.as_u32()) }
 			_ => { Err("parse param height failed")?  }
 		};
@@ -531,50 +491,25 @@ impl<T: Config> Pallet<T>{
 		return false;
 	}
 
-	fn parse_delegate_log(log: Vec<u8>)->Result<(String, String, u8, bool, H160), String>{
-		let params = vec![
-			EventParam{ name: "domain".to_string(), kind: ParamType::String, indexed: false, },
-			EventParam{ name: "path".to_string(), kind: ParamType::String, indexed: false, },
-			EventParam{ name: "set_type".to_string(), kind: ParamType::Uint(1), indexed: false, },
-			EventParam{ name: "is_remove".to_string(), kind: ParamType::Bool, indexed: false, },
-			EventParam{ name: "target_address".to_string(), kind: ParamType::Address, indexed: false, },
+	fn parse_delegate_log(log_bytes: Vec<u8>)->Result<(String, String, u8, bool, H160), String>{
+		let params_type = [
+			ParamType::String,
+			ParamType::String,
+			ParamType::Uint(1),
+			ParamType::Bool,
+			ParamType::Address,
 		];
+		let params = ethabi::decode(&params_type, &log_bytes).map_err(|e|format!("parse log failed: {}", e))?;
 
-		let event = Event {
-			name: "$SetDelegate".to_string(),
-			inputs: params,
-			anonymous: false,
-		};
-		let ev_hash = event.signature();
-
-		let raw_log = RawLog{
-			topics: vec![ev_hash],
-			data: log,
-		};
-
-		let log = event.parse_log(raw_log).map_err(|e|format!("parse log failed: {:?}", e))?;
-
-		let domain = match &log.params.get(0).ok_or("get param domain failed")?.value{
+		let domain = match &params.get(0).ok_or("get param domain failed")?{
 			Token::String(s)=>{ s.clone() }
 			_ => { Err("parse param domain failed")?  }
 		};
-		let path = match &log.params.get(1).ok_or("get param path failed")?.value{
+		let path = match &params.get(1).ok_or("get param path failed")?{
 			Token::String(s)=>{ s.clone() }
 			_ => { Err("parse param path failed")?  }
 		};
-		// let set_type = match &log.params.get(2).ok_or("get param set_type failed")?.value{
-		// 	Token::FixedBytes(rw_bytes)=>{ 
-		// 		if rw_bytes.len()!=1{
-		// 			return Err("the size of set_value size is 1 byte")?;
-		// 		}
-		// 		match rw_bytes[0]{
-		// 			SET_READ|SET_WRITE|DELETE_VALUE =>{ rw_bytes[0].clone() }
-		// 			_ => { return Err("the value of set_type is not in [0,1,2]")?; }
-		// 		}
-		// 	}
-		// 	_ => { Err("parse param set_type failed")?  }
-		// };
-		let set_type = match &log.params.get(2).ok_or("get param set_type failed")?.value{
+		let set_type = match &params.get(2).ok_or("get param set_type failed")?{
 			Token::Uint(n)=>{
 				if n == &U256::from(SET_READ){
 					SET_READ
@@ -590,7 +525,7 @@ impl<T: Config> Pallet<T>{
 				Err("parse param set_type failed")?
 			}
 		};
-		let is_remove = match &log.params.get(3).ok_or("get param is_remove failed")?.value{
+		let is_remove = match &params.get(3).ok_or("get param is_remove failed")?{
 			Token::Bool(b)=>{
 				b.clone()
 			}
@@ -598,7 +533,7 @@ impl<T: Config> Pallet<T>{
 				Err("parse param is_remove failed")?
 			}
 		};
-		let target_addr = match &log.params.get(4).ok_or("get param target_address failed")?.value{
+		let target_addr = match &params.get(4).ok_or("get param target_address failed")?{
 			Token::Address(addr)=>{ addr.clone() }
 			_ => { Err("parse param target_address failed")?  }
 		};
@@ -1067,14 +1002,58 @@ mod test2{
 
 	#[test]
 	fn ethabi_test(){
-		let domain = Token::String("aufs://0x0000000000000000000000000000000000000001".to_owned());
-		// let domain_str = match &domain{
-		// 	Token::String(s)=> s.clone(),
-		// 	_ => {return}
-		// };
-		// let x = domain.as_ref();
-		let domain_str = domain.clone().into_string().unwrap();
-		println!("{}", domain_str);
+		init_logger();
+		// let domain = Token::String("aufs://0x0000000000000000000000000000000000000001".to_owned());
+		// // let domain_str = match &domain{
+		// // 	Token::String(s)=> s.clone(),
+		// // 	_ => {return}
+		// // };
+		// // let x = domain.as_ref();
+		// let domain_str = domain.clone().into_string().unwrap();
+		// println!("{}", domain_str);
+
+		let from = H160::from(hex!("0000000000000000000000000000000000000001"));
+		// let c_addr = H160::from(hex!("0000000000000000000000000000000000000002"));
+
+		// "aufs://0x0000000000000000000000000000000000000001"
+		let domain_str = format!("aufs://{:?}", from);
+		let path_str = "/Web3Tube/movie1.mp4";
+		// 0x0101010101010101010101010101010101010101010101010101010101010101
+		let cid_bytes = [1u8;32];
+
+		let tokens = [
+			Token::String(domain_str.to_owned()),
+			Token::String(path_str.to_owned()),
+			Token::FixedBytes(cid_bytes.to_vec()),
+		];
+		let log = ethabi::encode(&tokens);
+
+		// let mut fix_bytes = vec![0u8;32];
+		// let token_params = [Token::String, Token::String, Token::FixedBytes(bytes32)];
+		let token_params = [ParamType::String, ParamType::String, ParamType::FixedBytes(32)];
+		if let Ok(token_vec) = ethabi::decode(&token_params, &log){
+			for t in token_vec.iter(){
+				log::info!("{:?}", t);
+			}
+		}
+	}
+
+	#[test]
+	fn evnet_hash_exmple(){
+		let params = vec![
+			EventParam{ name: "domain".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "path".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "cid_bytes".to_string(), kind: ParamType::FixedBytes(32), indexed: false, },
+		];
+
+		let event = ethabi::Event {
+			name: "$SetURI".to_string(),
+			inputs: params,
+			anonymous: false,
+		};
+		let ev_hash = event.signature();
+		assert_eq!(ev_hash, H256::from(hex!("89fe02195420686d75437d76eb54150bb43b2e19b6e17c8f6be110ba22f9a0f2")));
+		println!("0x{:?}", ev_hash);
 	}
 }
 

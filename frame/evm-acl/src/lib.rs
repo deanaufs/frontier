@@ -128,7 +128,7 @@ pub mod pallet {
 			if let Some(event_hash) = log.topics.first(){
 				match event_hash.as_bytes() {
 					SET_URI_HASH =>{
-						if let Err(e) = Self::set_uri(source, log.address, log.data){
+						if let Err(e) = Self::set_uri(source, log.data){
 							log::info!("set uri failed: {}", e);
 						}
 					},
@@ -169,7 +169,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn set_uri(source: H160, contract_addr: H160, log_bytes: Vec<u8>)->Result<(), String>{
+	fn set_uri(caller: H160, log_bytes: Vec<u8>)->Result<(), String>{
 
 		let (domain, path, cid_bytes) = Self::parse_set_uri_log(log_bytes)?;
 		// log::info!("{}, {}, {:?}", domain, path, cid_bytes);
@@ -177,7 +177,7 @@ impl<T: Config> Pallet<T> {
 		// domain: aufs://0x0000000000000000000000000000000000000001
 		// path  : /Web3Youtube/movie1.map4
 		// cid   : 0x086e5134915e1e70bf74fc8a621b706fa98167aae7f50290f0304aa2633c2cc0
-		if Self::check_uri_set_permission(&source, &contract_addr, &domain, &path){
+		if Self::check_uri_set_permission(&caller, &domain, &path){
 			let key = [domain, path].join("");
 			if cid_bytes == DELETE_URI_BYTES {
 				Uri::<T>::remove(key);
@@ -242,15 +242,15 @@ impl<T: Config> Pallet<T> {
 	/// path: "/Web3Tube/dir1/movie.mp4"
 	/// caller: 0x3637ccee721e0b3d9e3712c4c5dcdbc20b232bce
 	/// contract_addr: 0x3a6e65e7d282453e4f11161d2eba3856b4f69931
-	fn check_uri_set_permission(caller: &H160, contract_addr: &H160, domain: &str, path: &str)->bool{
+	fn check_uri_set_permission(caller: &H160, domain: &str, path: &str)->bool{
 		// check if caller is the owner
 		let owner_domain = format!("{}{:?}", AUFS_PREFIX, caller);
 		if domain.eq(&owner_domain){
 			return true;
 		}
 
-		// check if contract has write authorization
-		let contract_str = format!("{:?}", contract_addr);
+		// check if caller has write authorization
+		let caller_str = format!("{:?}", caller);
 		let path = String::from(path);
 		let sub_dir_vec = path.split("/").collect::<Vec<&str>>();
 
@@ -261,7 +261,7 @@ impl<T: Config> Pallet<T> {
 			if i!= 0{
 				check_dir.push_str(&format!("/{}", sub_dir));
 			}
-			let check_key = format!("{domain}{check_dir}@{STR_WRITE}#{contract_str}");
+			let check_key = format!("{domain}{check_dir}@{STR_WRITE}#{caller_str}");
 			// log::info!("{check_key}");
 
 			if let Some(height) = Authorization::<T>::get(&check_key){
@@ -678,14 +678,13 @@ mod test2{
 	#[test]
 	fn set_uri_basic_test(){
 		new_test_ext().execute_with(||{
-			let from = H160::from(hex!("0000000000000000000000000000000000000001"));
-			let c_addr = H160::from(hex!("0000000000000000000000000000000000000002"));
+			let owner = H160::from(hex!("0000000000000000000000000000000000000001"));
+			// let user = H160::from(hex!("0000000000000000000000000000000000000002"));
 
-			// "aufs://0x0000000000000000000000000000000000000001"
-			let domain_str = format!("aufs://{:?}", from);
+			// onwer insert file
+			let domain_str = format!("aufs://{:?}", owner); // "aufs://0x0000000000000000000000000000000000000001"
 			let path_str = "/Web3Tube/movie1.mp4";
-			// 0x0101010101010101010101010101010101010101010101010101010101010101
-			let cid_bytes = [1u8;32];
+			let cid_bytes = [1u8;32]; // 0x0101010101010101010101010101010101010101010101010101010101010101
 
 			let tokens = [
 				Token::String(domain_str.to_owned()),
@@ -696,46 +695,46 @@ mod test2{
 
 			// "aufs://0x0000000000000000000000000000000000000001/Web3Tube/movie1.mp4";
 			let check_key_1 = format!("{}{}", domain_str, path_str);
-
-			// insert or modify
 			let value = EvmAcl::uri(&check_key_1);
-			log::info!("before set_uri, {}: {:?}", check_key_1, value);
+			log::info!("before append, uri, {}: {:?}", check_key_1, value);
 			assert_eq!(value, None);
 
-			EvmAcl::set_uri(from, c_addr, log_bytes).expect("set uri failed");
+			EvmAcl::set_uri(owner.clone(), log_bytes).expect("set uri failed");
 
 			let value = EvmAcl::uri(&check_key_1);
-			log::info!("after set_uri: {}: {:?}", check_key_1, value);
+			log::info!("after append, uri: {}: {:?}", check_key_1, value);
 			assert_eq!(value, Some(cid_bytes));
 
-			// delete
+			// delete uri
+			let delete_cid_bytes = DELETE_URI_BYTES;
 			let tokens = [
 				Token::String(domain_str.to_owned()),
 				Token::String(path_str.to_owned()),
-				Token::FixedBytes(vec![0u8;32]),
+				Token::FixedBytes(delete_cid_bytes.to_vec()),
 			];
 			
 			let log_bytes = ethabi::encode(&tokens).to_vec();
-			EvmAcl::set_uri(from, c_addr, log_bytes).expect("set uri failed");
+			EvmAcl::set_uri(owner.clone(), log_bytes).expect("set uri failed");
 
 			let value = EvmAcl::uri(&check_key_1);
-			log::info!("after set_uri: {}: {:?}", check_key_1, value);
+			log::info!("delete valid uri: {}: {:?}", check_key_1, value);
 			assert_eq!(value, None);
 
-			// delete path not exsit
+			// delete uri which is not exsit
 			let path_not_exist = "/Web2Tube/movie1.mp4";
+			let delete_cid_bytes = DELETE_URI_BYTES;
 			let tokens = [
 				Token::String(domain_str.to_owned()),
 				Token::String(path_not_exist.to_owned()),
-				Token::FixedBytes(vec![0u8;32]),
+				Token::FixedBytes(delete_cid_bytes.to_vec()),
 			];
 			
 			let log_bytes = ethabi::encode(&tokens).to_vec();
-			EvmAcl::set_uri(from, c_addr, log_bytes).expect("set uri failed");
+			EvmAcl::set_uri(owner.clone(), log_bytes).expect("set uri failed");
 
 			let check_key = format!("{}{}", domain_str, path_not_exist);
 			let value = EvmAcl::uri(&check_key);
-			log::info!("after set_uri: {}: {:?}", check_key, value);
+			log::info!("delete invalid uri: {}: {:?}", check_key, value);
 			assert_eq!(value, None);
 		});
 	}

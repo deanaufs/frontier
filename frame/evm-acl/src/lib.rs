@@ -15,8 +15,8 @@ const CID_LENGTH :usize = 32;
 const AUFS_PREFIX: &str = "aufs://";
 
 const KEY_DELEGATED: &str = "_delegated";
-const KEY_READ: &str = "read";
-const KEY_WRITE: &str = "write";
+const STR_READ: &str = "read";
+const STR_WRITE: &str = "write";
 
 const DELETE_VALUE: u8 = 0u8;
 const READ_VALUE :u8 = 1u8;
@@ -274,7 +274,7 @@ impl<T: Config> Pallet<T> {
 			if i!= 0{
 				check_dir.push_str(&format!("/{}", sub_dir));
 			}
-			let check_key = format!("{domain}{check_dir}@{KEY_WRITE}#{contract_str}");
+			let check_key = format!("{domain}{check_dir}@{STR_WRITE}#{contract_str}");
 			// log::info!("{check_key}");
 
 			if let Some(height) = Authorization::<T>::get(&check_key){
@@ -288,24 +288,15 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	fn set_authorization(source: H160, contract_addr: H160, log_bytes: Vec<u8>)->Result<(), String>{
+	fn set_authorization(caller: H160, contract_addr: H160, log_bytes: Vec<u8>)->Result<(), String>{
 		let (domain, path, rw_type, target_addr, set_height) = Self::parse_authorization_log(log_bytes)?;
 
 		let now = <frame_system::Pallet<T>>::block_number();
 
-		// let source = H160::from(hex!("dd31c61141abd04a99fd6822c8558d43593c715f"));
-		// let domain = "aufs://alice";
-		// let path = "/Web3Tube/dir1/movie.mp4";
-		// let rw_type = 0u8;
-		// let contract_addr = H160::from(hex!("d43593c715fdd31c61141abd04a99fd6822c8558"));
-
-		// let target_addr = H160::from(hex!("04a99fd6822c8d43593c715fdd31c61141abd558"));
-		// let set_height = T::BlockNumber::from(100u32);
-
-		if Self::check_authorization_set_permission(&source, &contract_addr, &domain, &path, rw_type){
+		if Self::check_authorization_set_permission(&caller, &contract_addr, &domain, &path, rw_type, &target_addr){
 			let rw_type_str = {
-				if rw_type == READ_VALUE { String::from(KEY_READ) }
-				else if rw_type == WRITE_VALUE { String::from(KEY_WRITE) }
+				if rw_type == READ_VALUE { String::from(STR_READ) }
+				else if rw_type == WRITE_VALUE { String::from(STR_WRITE) }
 				else{
 					return Err(format!("Set authorization type value err, expect: 0,1, recv: {}", rw_type));
 				}
@@ -322,14 +313,26 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn check_authorization_set_permission(caller: &H160, contract_addr: &H160, domain: &str, path: &str, rw_type: u8)->bool{
+	fn check_authorization_set_permission(
+		caller: &H160,
+		contract_addr: &H160,
+		domain: &str,
+		path: &str,
+		rw_type: u8,
+		target_addr: &H160,
+	)->bool{
+		// set authorization by owner
 		let owner_domain = format!("{}{:?}", AUFS_PREFIX, caller);
 		if owner_domain.eq(domain){
 			return true;
 		}
 
-		let path = String::from(path);
+		// set authorization by contract
+		if caller != target_addr{
+			return false;
+		}
 
+		let path = String::from(path);
 		let sub_path_vec = path.split("/").collect::<Vec<&str>>();
 
 		if rw_type == READ_VALUE{
@@ -339,15 +342,19 @@ impl<T: Config> Pallet<T> {
 				if i != 0{
 					check_path.push_str(&format!("/{}", sub_path));
 				}
+				// log::info!("{}", check_path);
 
-				let check_read_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, READ_VALUE);
+				// aufs://0x0000000000000000000000000000000000000001/Web3Tube@_delegated#read
+				let check_read_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, STR_READ);
+				// log::info!("{}", check_read_key);
 				if let Some(addr_vec) = <Delegate<T>>::get(check_read_key){
 					if addr_vec.contains(contract_addr){
 						return true;
 					}
 				}
 
-				let check_write_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, WRITE_VALUE);
+				let check_write_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, STR_WRITE);
+				// log::info!("{}", check_write_key);
 				if let Some(addr_vec) = <Delegate<T>>::get(check_write_key){
 					if addr_vec.contains(contract_addr){
 						return true;
@@ -363,44 +370,11 @@ impl<T: Config> Pallet<T> {
 					check_path.push_str(&format!("/{}", sub_path));
 				}
 
-				let check_write_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, WRITE_VALUE);
+				let check_write_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, STR_WRITE);
 				if let Some(addr_vec) = <Delegate<T>>::get(check_write_key){
 					if addr_vec.contains(contract_addr){
 						return true;
 					}
-				}
-			}
-		}
-
-		return false;
-	}
-
-	fn _check_authorization_set_permission_v1(caller: &H160, contract_addr: &H160, domain: &str, path: &str, rw_type: u8)->bool{
-		let owner_domain = format!("{}{:?}", AUFS_PREFIX, caller);
-		if owner_domain.eq(domain){
-			return true;
-		}
-		let path = String::from(path);
-
-		let sub_path_vec = path.split("/").collect::<Vec<&str>>();
-		let rw_type_str = {
-			if rw_type == READ_VALUE { String::from(KEY_READ) }
-			else if rw_type == WRITE_VALUE {String::from(KEY_WRITE)}
-			else{
-				return false;
-			}
-		};
-
-		let mut check_path = String::new();
-		for (i, sub_path) in sub_path_vec.iter().enumerate(){
-			if i != 0{
-				check_path.push_str(&format!("/{}", sub_path));
-			}
-			let check_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, rw_type_str);
-			// log::info!("{}", check_key);
-			if let Some(addr_vec) = <Delegate<T>>::get(check_key){
-				if addr_vec.contains(contract_addr){
-					return true;
 				}
 			}
 		}
@@ -465,6 +439,39 @@ impl<T: Config> Pallet<T> {
 
 		Ok((domain, path, rw_type, target_addr, height))
 	}
+
+	fn _check_authorization_set_permission_v1(caller: &H160, contract_addr: &H160, domain: &str, path: &str, rw_type: u8)->bool{
+		let owner_domain = format!("{}{:?}", AUFS_PREFIX, caller);
+		if owner_domain.eq(domain){
+			return true;
+		}
+		let path = String::from(path);
+
+		let sub_path_vec = path.split("/").collect::<Vec<&str>>();
+		let rw_type_str = {
+			if rw_type == READ_VALUE { String::from(STR_READ) }
+			else if rw_type == WRITE_VALUE {String::from(STR_WRITE)}
+			else{
+				return false;
+			}
+		};
+
+		let mut check_path = String::new();
+		for (i, sub_path) in sub_path_vec.iter().enumerate(){
+			if i != 0{
+				check_path.push_str(&format!("/{}", sub_path));
+			}
+			let check_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, rw_type_str);
+			// log::info!("{}", check_key);
+			if let Some(addr_vec) = <Delegate<T>>::get(check_key){
+				if addr_vec.contains(contract_addr){
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
 }
 
 impl<T: Config> Pallet<T>{
@@ -476,8 +483,8 @@ impl<T: Config> Pallet<T>{
 			match set_type{
 				READ_VALUE|WRITE_VALUE => {
 					let rw_str = {
-						if set_type == READ_VALUE{ String::from(KEY_READ) }
-						else{ String::from(KEY_WRITE) }
+						if set_type == READ_VALUE{ String::from(STR_READ) }
+						else{ String::from(STR_WRITE) }
 					};
 
 					let key = format!("{}{}@{KEY_DELEGATED}#{}", domain, path, rw_str); 
@@ -498,7 +505,7 @@ impl<T: Config> Pallet<T>{
 				DELETE_VALUE =>{
 					// delete read address 
 					let mut delete_key = false;
-					let read_key = format!("{}{}@{KEY_DELEGATED}#{KEY_READ}", domain, path); 
+					let read_key = format!("{}{}@{KEY_DELEGATED}#{STR_READ}", domain, path); 
 					Delegate::<T>::mutate(&read_key, |addr_vec|{
 						if let Some(addr_vec) =  addr_vec.as_mut(){
 							let index = addr_vec.iter().position(|&v|v==target_addr);
@@ -516,7 +523,7 @@ impl<T: Config> Pallet<T>{
 
 					// delete write address 
 					let mut delete_key = false;
-					let write_key = format!("{}{}@{KEY_DELEGATED}#{KEY_WRITE}", domain, path); 
+					let write_key = format!("{}{}@{KEY_DELEGATED}#{STR_WRITE}", domain, path); 
 					Delegate::<T>::mutate(&write_key, |addr_vec|{
 						if let Some(addr_vec) =  addr_vec.as_mut(){
 							let index = addr_vec.iter().position(|&v|v==target_addr);
@@ -854,8 +861,8 @@ mod test2{
 			EvmAcl::set_delegate(from, log_bytes).expect("set failed");
 
 			let set_type_str = {
-				if set_type == 1{ format!("read") }
-				else if set_type == 2{ format!("write") }
+				if set_type == READ_VALUE{ format!("read") }
+				else if set_type == WRITE_VALUE{ format!("write") }
 				else{ format!("undefined") }
 			};
 
@@ -931,8 +938,8 @@ mod test2{
 			// D author B through C
 			let owner = H160::from(hex!("0000000000000000000000000000000000000001"));
 			let c_addr = H160::from(hex!("cccccccccccccccccccccccccccccccccccccccc"));
-			let other_caller = H160::from(hex!("dddddddddddddddddddddddddddddddddddddddd"));
 			let user = H160::from(hex!("0000000000000000000000000000000000000002"));
+			let other_user = H160::from(hex!("2000000000000000000000000000000000000000"));
 
 			// "aufs://0x0000000000000000000000000000000000000001"
 			let domain_str = format!("aufs://{:?}", owner);
@@ -949,6 +956,10 @@ mod test2{
 			let from = owner.clone();
 			EvmAcl::set_delegate(from, log).expect("Set delegate failed");
 
+			// let check_key = format!("{}{}@{KEY_DELEGATED}#{STR_READ}", domain_str, path_str);
+			// let value = EvmAcl::delegate(&check_key);
+			// log::info!("{:?}", value);
+
 			// aufs://alice/Web3Tube@read#0x570da6…12f5dc: height
 			let height = 100u64;
 			let set_value = READ_VALUE;
@@ -961,12 +972,32 @@ mod test2{
 				Token::Uint(U256::from(height)),
 			];
 			let log = ethabi::encode(&authorize_tokens);
-			EvmAcl::set_authorization(other_caller, c_addr, log).expect("Set authorization failed");
+			EvmAcl::set_authorization(user, c_addr, log).expect("Set authorization failed");
 
-			let check_key = format!("{domain_str}{path_str}@{}#{:?}", KEY_READ, user);
+
+			let check_key = format!("{domain_str}{path_str}@{}#{:?}", STR_READ, user);
 			let value = EvmAcl::authorization(&check_key);
 			log::info!("{}: {:?}", check_key, value);
 			assert_eq!(value, Some(height));
+
+			// set authorization to other user
+			let height = 100u64;
+			let set_value = READ_VALUE;
+
+			let authorize_tokens = [
+				Token::String(domain_str.to_owned()),
+				Token::String(path_str.to_owned()),
+				Token::FixedBytes(vec![set_value]),
+				Token::Address(other_user.clone()),
+				Token::Uint(U256::from(height)),
+			];
+			let log = ethabi::encode(&authorize_tokens);
+			EvmAcl::set_authorization(user, c_addr, log).expect("Set authorization failed");
+
+			let check_key = format!("{domain_str}{path_str}@{}#{:?}", STR_READ, other_user);
+			let value = EvmAcl::authorization(&check_key);
+			log::info!("{}: {:?}", check_key, value);
+			assert_eq!(value, None);
 		});
 	}
 

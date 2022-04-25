@@ -1,20 +1,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, vec::Vec};
-use codec::alloc::string::{String, ToString};
+use codec::alloc::string::{String};
 use scale_info::prelude::format;
-use sp_core::{H160, H256, Bytes, U256};
+use sp_core::{H160, U256};
 use fp_evm::Log;
 use hex_literal::hex;
 use frame_support::traits::GenesisBuild;
 
-use ethabi::{Token, ParamType, Event, EventParam, RawLog};
+use ethabi::{Token, ParamType};
 
 pub use pallet::*;
 const CID_LENGTH :usize = 32;
 const AUFS_PREFIX: &str = "aufs://";
 
-const KEY_DELEGATED: &str = "_delegated";
+const STR_DELEGATED: &str = "_delegated";
 const STR_READ: &str = "read";
 const STR_WRITE: &str = "write";
 
@@ -332,7 +332,7 @@ impl<T: Config> Pallet<T> {
 				// log::info!("{}", check_path);
 
 				// aufs://0x0000000000000000000000000000000000000001/Web3Tube@_delegated#read
-				let check_read_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, STR_READ);
+				let check_read_key = format!("{}{}@{STR_DELEGATED}#{}", domain, check_path, STR_READ);
 				// log::info!("{}", check_read_key);
 				if let Some(addr_vec) = <Delegate<T>>::get(check_read_key){
 					if addr_vec.contains(contract_addr){
@@ -340,7 +340,7 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 
-				let check_write_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, STR_WRITE);
+				let check_write_key = format!("{}{}@{STR_DELEGATED}#{}", domain, check_path, STR_WRITE);
 				// log::info!("{}", check_write_key);
 				if let Some(addr_vec) = <Delegate<T>>::get(check_write_key){
 					if addr_vec.contains(contract_addr){
@@ -357,7 +357,7 @@ impl<T: Config> Pallet<T> {
 					check_path.push_str(&format!("/{}", sub_path));
 				}
 
-				let check_write_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, STR_WRITE);
+				let check_write_key = format!("{}{}@{STR_DELEGATED}#{}", domain, check_path, STR_WRITE);
 				if let Some(addr_vec) = <Delegate<T>>::get(check_write_key){
 					if addr_vec.contains(contract_addr){
 						return true;
@@ -374,9 +374,9 @@ impl<T: Config> Pallet<T> {
 		let params_type = [
 			ParamType::String,
 			ParamType::String,
-			ParamType::Uint(1),
+			ParamType::Uint(32),
 			ParamType::Address,
-			ParamType::Uint(1),
+			ParamType::Uint(32),
 		];
 		let params = ethabi::decode(&params_type, &log_bytes).map_err(|e|format!("pasre log failed: {}", e))?;
 
@@ -441,7 +441,7 @@ impl<T: Config> Pallet<T> {
 			if i != 0{
 				check_path.push_str(&format!("/{}", sub_path));
 			}
-			let check_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, check_path, rw_type_str);
+			let check_key = format!("{}{}@{STR_DELEGATED}#{}", domain, check_path, rw_type_str);
 			// log::info!("{}", check_key);
 			if let Some(addr_vec) = <Delegate<T>>::get(check_key){
 				if addr_vec.contains(contract_addr){
@@ -461,7 +461,7 @@ impl<T: Config> Pallet<T>{
 		if Self::check_delegate_set_permission(&source, &domain){
 			// "aufs://alice/dir1@_delegated#read"
 			if set_type == SET_READ{
-				let key = format!("{}{}@{KEY_DELEGATED}#{}", domain, path, STR_READ); 
+				let key = format!("{}{}@{STR_DELEGATED}#{}", domain, path, STR_READ); 
 				if is_remove{
 					Self::remove_delegate_item(&key, &target_addr);
 				}
@@ -470,7 +470,7 @@ impl<T: Config> Pallet<T>{
 				}
 			}
 			if set_type == SET_WRITE{
-				let key = format!("{}{}@{KEY_DELEGATED}#{}", domain, path, STR_WRITE); 
+				let key = format!("{}{}@{STR_DELEGATED}#{}", domain, path, STR_WRITE); 
 				if is_remove{
 					Self::remove_delegate_item(&key, &target_addr);
 				}
@@ -495,7 +495,7 @@ impl<T: Config> Pallet<T>{
 		let params_type = [
 			ParamType::String,
 			ParamType::String,
-			ParamType::Uint(1),
+			ParamType::Uint(32),
 			ParamType::Bool,
 			ParamType::Address,
 		];
@@ -543,7 +543,7 @@ impl<T: Config> Pallet<T>{
 
 	fn remove_delegate_item(key: &str, target_addr: &H160){
 		let mut delete_key = false;
-		// let read_key = format!("{}{}@{KEY_DELEGATED}#{}", domain, path, STR_READ); 
+		// let read_key = format!("{}{}@{STR_DELEGATED}#{}", domain, path, STR_READ); 
 		Delegate::<T>::mutate(key, |addr_vec|{
 			if let Some(addr_vec) =  addr_vec.as_mut(){
 				let index = addr_vec.iter().position(|v|v==target_addr);
@@ -583,8 +583,10 @@ mod test2{
 
 	use log::*;
 	use std::{io::Write,};
+	use sp_core::H256;
 	use env_logger::Builder;
 	use chrono::Local;
+	use ethabi::EventParam;
 	// use ethabi::encode;
 
 	use crate as pallet_evm_acl;
@@ -929,10 +931,10 @@ mod test2{
 	}
 
 	#[test]
-	fn combine_test(){
+	fn combine_test1(){
 		new_test_ext().execute_with(||{
 			// A delegate to C
-			// D author B through C
+			// B author B through C
 			let owner = H160::from(hex!("0000000000000000000000000000000000000001"));
 			let c_addr = H160::from(hex!("cccccccccccccccccccccccccccccccccccccccc"));
 			let user = H160::from(hex!("0000000000000000000000000000000000000002"));
@@ -955,11 +957,10 @@ mod test2{
 			let from = owner.clone();
 			EvmAcl::set_delegate(from, log).expect("Set delegate failed");
 
-			// let check_key = format!("{}{}@{KEY_DELEGATED}#{STR_READ}", domain_str, path_str);
+			// let check_key = format!("{}{}@{STR_DELEGATED}#{STR_READ}", domain_str, path_str);
 			// let value = EvmAcl::delegate(&check_key);
 			// log::info!("{:?}", value);
 
-			// aufs://alice/Web3Tube@read#0x570da6…12f5dc: height
 			let height = 100u64;
 			let set_value = SET_READ;
 
@@ -973,7 +974,7 @@ mod test2{
 			let log = ethabi::encode(&authorize_tokens);
 			EvmAcl::set_authorization(user, c_addr, log).expect("Set authorization failed");
 
-
+			// aufs://alice/Web3Tube@read#0x570da6…12f5dc: height
 			let check_key = format!("{domain_str}{path_str}@{}#{:?}", STR_READ, user);
 			let value = EvmAcl::authorization(&check_key);
 			log::info!("{}: {:?}", check_key, value);
@@ -997,6 +998,83 @@ mod test2{
 			let value = EvmAcl::authorization(&check_key);
 			log::info!("{}: {:?}", check_key, value);
 			assert_eq!(value, None);
+		});
+	}
+
+	#[test]
+	fn combine_test2(){
+		new_test_ext().execute_with(||{
+			let user_a = H160::from(hex!("0000000000000000000000000000000000000001"));
+			let user_b = H160::from(hex!("0000000000000000000000000000000000000002"));
+			let c_addr = H160::from(hex!("cccccccccccccccccccccccccccccccccccccccc"));
+
+			let domain_str = format!("{}{:?}", AUFS_PREFIX, user_a);
+			let path_str = "/Web3Tube/movie1.mp4";
+
+			let delegate_set_value = SET_READ;
+			// let delegate_set_value = SET_WRITE;
+			let target_addr = &c_addr;
+			let is_remove = false;
+			let delegate_tokens = [
+				Token::String(domain_str.to_owned()),
+				Token::String(path_str.to_owned()),
+				Token::Uint(delegate_set_value.into()),
+				Token::Bool(is_remove),
+				Token::Address(target_addr.clone()),
+			];
+			let log_bytes = ethabi::encode(&delegate_tokens);
+			EvmAcl::set_delegate(user_a, log_bytes).expect("Set delegate failed");
+			// aufs://alice/dir1@_delegated#read : [SC_1]
+			let check_key = format!("{}{}@{STR_DELEGATED}#{STR_READ}", domain_str, path_str);
+			// let check_key = format!("{}{}@{STR_DELEGATED}#{STR_WRITE}", domain_str, path_str);
+			let value = EvmAcl::delegate(&check_key);
+			assert_eq!(value, Some(vec![c_addr.clone()]));
+			log::info!("{:?}", value);
+
+			// append read authorization
+			let authorization_set_value = SET_READ;
+			let set_height = 100u64;
+			let target_addr = &user_b;
+			let authorization_tokens = [
+				Token::String(domain_str.to_owned()),
+				Token::String(path_str.to_owned()),
+				Token::Uint(authorization_set_value.into()),
+				Token::Address(target_addr.clone()),
+				Token::Uint(set_height.into()),
+			];
+			let log_bytes = ethabi::encode(&authorization_tokens);
+			EvmAcl::set_authorization(user_b, c_addr, log_bytes).expect("Set authorization failed");
+
+			// aufs://alice/Web3Tube@read#0x570da6…12f5dc : height
+			let check_key = format!("{}{}@{STR_READ}#{:?}", domain_str, path_str, target_addr.clone());
+			let value = EvmAcl::authorization(&check_key);
+			// assert_eq!(value, Some(set_height));
+			log::info!("{:?}", value);
+
+			// append write authorization
+			let authorization_set_value = SET_WRITE;
+			let set_height = 100u64;
+			let target_addr = &user_b;
+			let authorization_tokens = [
+				Token::String(domain_str.to_owned()),
+				Token::String(path_str.to_owned()),
+				Token::Uint(authorization_set_value.into()),
+				Token::Address(target_addr.clone()),
+				Token::Uint(set_height.into()),
+			];
+			let log_bytes = ethabi::encode(&authorization_tokens);
+			EvmAcl::set_authorization(user_b, c_addr, log_bytes).expect("Set authorization failed");
+
+			// aufs://alice/Web3Tube@read#0x570da6…12f5dc : height
+			let check_key = format!("{}{}@{STR_WRITE}#{:?}", domain_str, path_str, target_addr.clone());
+			let value = EvmAcl::authorization(&check_key);
+			log::info!("{:?}", value);
+			if delegate_set_value == SET_WRITE{
+				assert_eq!(value, Some(set_height));
+			}
+			else{
+				assert_eq!(value, None);
+			}
 		});
 	}
 
@@ -1064,6 +1142,8 @@ mod tests{
 	use std::{io::Write,};
 	use env_logger::Builder;
 	use chrono::Local;
+	use sp_core::H256;
+	use ethabi::{Event, EventParam, RawLog};
 	use sha3::{Digest, Keccak256};
 
 	fn init_logger() {
@@ -1115,7 +1195,7 @@ mod tests{
 
 		// log::info!("{:?}", ev_hash);
 		let method_bytes = b"$SetURI(string,string,bytes32)";
-		let method_hash = H256::from_slice(sha3::Keccak256::digest(method_bytes).as_slice());
+		let method_hash = H256::from_slice(Keccak256::digest(method_bytes).as_slice());
 		log::info!("{:?}", method_hash);
 	}
 

@@ -31,11 +31,11 @@ const SET_URI_HASH: &[u8] =
 
 // event: $SetAuthorization(string,uint8,address,u32)
 const SET_AUTHORIZATION_HASH: &[u8] = 
-	&hex!("ba3093b03ca4755ef7c520662e49261a353f31a25288a73f6aac910b25697c81");
+	&hex!("d84f83deb7a98e39ef9d7015a3c1abed076e748b975b2f4fe5e6df34e48adc35");
 
 // event: $SetDelegate(string,address,uint8)
-const SET_DELEGATE: &[u8] = 
-	&hex!("784d07d8be5f051a3f05b02a551e41c5dd705fcf3ac4eae3a9b48d9905491939");
+const SET_DELEGATE_HASH: &[u8] = 
+	&hex!("b379c9e413b8b3bd0883d3f41fdb792e6358eca100f32ef9ac4a828a2c5f2db9");
 
 const TRANSFER_HASH: &[u8] = 
 	&hex!("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
@@ -137,7 +137,7 @@ pub mod pallet {
 							log::info!("set authorization failed: {}", e);
 						}
 					},
-					SET_DELEGATE => {
+					SET_DELEGATE_HASH => {
 						if let Err(e) = Self::set_delegate(source, log.data){
 							log::info!("set delegate failed: {}", e);
 						}
@@ -574,7 +574,6 @@ impl<T: Config> Pallet<T>{
 			});
 		}
 	}
-
 }
 
 #[cfg(test)]
@@ -1118,9 +1117,9 @@ mod test2{
 	#[test]
 	fn evnet_hash_exmple(){
 		let params = vec![
-			EventParam{ name: "domain".to_string(), kind: ParamType::String, indexed: false, },
-			EventParam{ name: "path".to_string(), kind: ParamType::String, indexed: false, },
-			EventParam{ name: "cid_bytes".to_string(), kind: ParamType::FixedBytes(32), indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::FixedBytes(32), indexed: false, },
 		];
 
 		let event = ethabi::Event {
@@ -1129,8 +1128,57 @@ mod test2{
 			anonymous: false,
 		};
 		let ev_hash = event.signature();
-		assert_eq!(ev_hash, H256::from(hex!("89fe02195420686d75437d76eb54150bb43b2e19b6e17c8f6be110ba22f9a0f2")));
-		println!("0x{:?}", ev_hash);
+		// assert_eq!(ev_hash, H256::from(hex!("89fe02195420686d75437d76eb54150bb43b2e19b6e17c8f6be110ba22f9a0f2")));
+		println!("$SetURI:\n{:?}\n", ev_hash);
+
+		// let method_name = "$SetURI";
+		// let params = [
+		// 	ParamType::String,
+		// 	ParamType::String,
+		// 	ParamType::FixedBytes(32),
+		// ];
+
+		// let sig = ethabi::long_signature(method_name, &params);
+		// println!("{}", sig);
+
+		// let event = ethabi::Event::
+
+		let params = vec![
+			EventParam{ name: "".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::Uint(32), indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::Address, indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::Uint(32), indexed: false, },
+		];
+
+		let event = ethabi::Event {
+			name: "$SetAuthorization".to_string(),
+			inputs: params,
+			anonymous: false,
+		};
+
+		let ev_hash = event.signature();
+		// assert_eq!(ev_hash, H256::from(hex!("d84f83deb7a98e39ef9d7015a3c1abed076e748b975b2f4fe5e6df34e48adc35")));
+
+		println!("$SetAuthorization:\n{:?}\n", ev_hash);
+
+		let params = vec![
+			EventParam{ name: "".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::String, indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::Uint(32), indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::Bool, indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::Address, indexed: false, },
+		];
+
+		let event = ethabi::Event {
+			name: "$SetDelegate".to_string(),
+			inputs: params,
+			anonymous: false,
+		};
+
+		let ev_hash = event.signature();
+		// assert_eq!(ev_hash, H256::from(hex!("b379c9e413b8b3bd0883d3f41fdb792e6358eca100f32ef9ac4a828a2c5f2db9")));
+		println!("$SetDelegate:\n{:?}\n", ev_hash);
 	}
 }
 

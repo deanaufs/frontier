@@ -6,7 +6,10 @@ use scale_info::prelude::format;
 use sp_core::{H160, U256};
 use fp_evm::Log;
 use hex_literal::hex;
-use frame_support::traits::GenesisBuild;
+use frame_support::{
+	dispatch::DispatchResult,
+	traits::GenesisBuild,
+};
 
 use ethabi::{Token, ParamType};
 
@@ -55,7 +58,28 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {}
+	pub trait Config: frame_system::Config {
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+	}
+	
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config>{
+		UriSet(String, [u8;CID_LENGTH]),
+		UriRemoved(String),
+		
+		AuthorizationSet(String, H160, T::BlockNumber),
+		AuthorizationRemoved(String, H160),
+
+		DelegateSet(String, H160),
+		DelegateRemoved(String, H160),
+	}
+
+	#[pallet::error]
+	pub enum Error<T>{
+		ParseLogFailed,
+		NoSetPermission,
+	}
 
 	#[pallet::storage]
 	#[pallet::getter(fn value)]
@@ -129,17 +153,17 @@ pub mod pallet {
 				match event_hash.as_bytes() {
 					SET_URI_HASH =>{
 						if let Err(e) = Self::set_uri(source, log.data){
-							log::info!("set uri failed: {}", e);
+							log::info!("set uri failed: {:?}", e);
 						}
 					},
 					SET_AUTHORIZATION_HASH => {
 						if let Err(e) = Self::set_authorization(source, log.address, log.data){
-							log::info!("set authorization failed: {}", e);
+							log::info!("set authorization failed: {:?}", e);
 						}
 					},
 					SET_DELEGATE_HASH => {
 						if let Err(e) = Self::set_delegate(source, log.data){
-							log::info!("set delegate failed: {}", e);
+							log::info!("set delegate failed: {:?}", e);
 						}
 					},
 					TRANSFER_HASH =>{
@@ -169,9 +193,13 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn set_uri(caller: H160, log_bytes: Vec<u8>)->Result<(), String>{
+	fn set_uri(caller: H160, log_bytes: Vec<u8>)->DispatchResult{
 
-		let (domain, path, cid_bytes) = Self::parse_set_uri_log(log_bytes)?;
+		let (domain, path, cid_bytes) = Self::parse_set_uri_log(log_bytes)
+			.map_err(|e|{
+				log::info!("parse set_uri log failed: {}", e);
+				Error::<T>::ParseLogFailed
+			})?;
 		// log::info!("{}, {}, {:?}", domain, path, cid_bytes);
 
 		// domain: aufs://0x0000000000000000000000000000000000000001
@@ -180,17 +208,23 @@ impl<T: Config> Pallet<T> {
 		if Self::check_uri_set_permission(&caller, &domain, &path){
 			let key = [domain, path].join("");
 			if cid_bytes == DELETE_URI_BYTES {
-				Uri::<T>::remove(key);
+				Uri::<T>::remove(&key);
+
+				Self::deposit_event(Event::<T>::UriRemoved(key));
 				return Ok(());
 			}
 			else{
 				let value = cid_bytes;
-				Uri::<T>::insert(key, value);
+				Uri::<T>::insert(key.clone(), value.clone());
+
+				Self::deposit_event(Event::<T>::UriSet(key, value));
 				return Ok(());
 			}
 		}
 		else{
-			Err("No set permission")?
+			// Err("No set permission")?
+			// return Err(Error::<T>::NoSetPermission)?;
+			return Err(Error::<T>::NoSetPermission)?;
 		}
 	}
 
@@ -275,8 +309,12 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
-	fn set_authorization(caller: H160, contract_addr: H160, log_bytes: Vec<u8>)->Result<(), String>{
-		let (domain, path, rw_type, target_addr, set_height) = Self::parse_authorization_log(log_bytes)?;
+	fn set_authorization(caller: H160, contract_addr: H160, log_bytes: Vec<u8>)->DispatchResult{
+		let (domain, path, rw_type, target_addr, set_height) = 
+			Self::parse_authorization_log(log_bytes).map_err(|e|{
+				log::info!("parse authorization log failed: {}", e);
+				Error::<T>::ParseLogFailed
+			})?;
 
 		let now = <frame_system::Pallet<T>>::block_number();
 
@@ -285,19 +323,28 @@ impl<T: Config> Pallet<T> {
 				if rw_type == SET_READ { String::from(STR_READ) }
 				else if rw_type == SET_WRITE { String::from(STR_WRITE) }
 				else{
-					return Err(format!("Set authorization type value err, expect: 0,1, recv: {}", rw_type));
+					// return Err(format!("Set authorization type value err, expect: 0,1, recv: {}", rw_type));
+					return Err(Error::<T>::ParseLogFailed)?;
 				}
 			};
 			let key = format!("{domain}{path}@{rw_type_str}#{:?}", target_addr);
 
 			if (set_height > now) || ( set_height == T::BlockNumber::from(DELETE_AUTHORIZATION_BLOCK_HEIGHT) ){
-				Authorization::<T>::insert(key, set_height );
+				Authorization::<T>::insert(&key, set_height);
+
+				Self::deposit_event(Event::<T>::AuthorizationSet(key, target_addr, T::BlockNumber::from(set_height)));
+				return Ok(());
 			}
 			else{
-				Authorization::<T>::remove(key);
+				Authorization::<T>::remove(&key);
+
+				Self::deposit_event(Event::<T>::AuthorizationRemoved(key, target_addr));
+				return Ok(());
 			}
 		}
-		Ok(())
+		else{
+			return Err(Error::<T>::NoSetPermission)?;
+		}
 	}
 
 	fn check_authorization_set_permission(
@@ -455,8 +502,12 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> Pallet<T>{
-	fn set_delegate(source: H160, log: Vec<u8>)->Result<(), String>{
-		let (domain, path, set_type, is_remove, target_addr) = Self::parse_delegate_log(log)?;
+	fn set_delegate(source: H160, log: Vec<u8>)->DispatchResult{
+		let (domain, path, set_type, is_remove, target_addr) = 
+			Self::parse_delegate_log(log).map_err(|e|{
+				log::info!("parse delegate log failed: {}", e);
+				Error::<T>::ParseLogFailed
+			})?;
 
 		if Self::check_delegate_set_permission(&source, &domain){
 			// "aufs://alice/dir1@_delegated#read"
@@ -464,22 +515,39 @@ impl<T: Config> Pallet<T>{
 				let key = format!("{}{}@{STR_DELEGATED}#{}", domain, path, STR_READ); 
 				if is_remove{
 					Self::remove_delegate_item(&key, &target_addr);
+
+					Self::deposit_event(Event::<T>::DelegateRemoved(key, target_addr));
+					return Ok(());
 				}
 				else{
 					Self::append_delegate_item(&key, &target_addr);
+
+					Self::deposit_event(Event::<T>::DelegateSet(key, target_addr));
+					return Ok(());
 				}
 			}
-			if set_type == SET_WRITE{
+			else if set_type == SET_WRITE{
 				let key = format!("{}{}@{STR_DELEGATED}#{}", domain, path, STR_WRITE); 
 				if is_remove{
 					Self::remove_delegate_item(&key, &target_addr);
+
+					Self::deposit_event(Event::<T>::DelegateRemoved(key, target_addr));
+					return Ok(());
 				}
 				else{
 					Self::append_delegate_item(&key, &target_addr);
+
+					Self::deposit_event(Event::<T>::DelegateSet(key, target_addr));
+					return Ok(());
 				}
 			}
+			else{
+				return Err(Error::<T>::ParseLogFailed)?;
+			}
 		}
-		Ok(())
+		else{
+			return Err(Error::<T>::NoSetPermission)?;
+		}
 	}
 
 	fn check_delegate_set_permission(caller: &H160, domain: &str)->bool{
@@ -589,7 +657,7 @@ mod test2{
 	// use ethabi::encode;
 
 	use crate as pallet_evm_acl;
-	use frame_support::{parameter_types};
+	use frame_support::{parameter_types, assert_noop};
 	// use frame_system::EnsureSignedBy;
 	use sp_runtime::{
 		testing::Header,
@@ -620,7 +688,7 @@ mod test2{
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			EvmAcl: pallet_evm_acl::{Pallet, Storage, Config<T>},
+			EvmAcl: pallet_evm_acl::{Pallet, Storage, Config<T>, Event<T>},
 		}
 	);
 
@@ -655,7 +723,9 @@ mod test2{
 		type OnSetCode = ();
 	}
 
-	impl pallet_evm_acl::Config for Test{}
+	impl pallet_evm_acl::Config for Test{
+		type Event = Event;
+	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
 		init_logger();
@@ -990,7 +1060,10 @@ mod test2{
 				Token::Uint(U256::from(height)),
 			];
 			let log = ethabi::encode(&authorize_tokens);
-			EvmAcl::set_authorization(user, c_addr, log).expect("Set authorization failed");
+			assert_noop!(
+				EvmAcl::set_authorization(user, c_addr, log),
+				Error::<Test>::NoSetPermission,
+			);
 
 			let check_key = format!("{domain_str}{path_str}@{}#{:?}", STR_READ, other_user);
 			let value = EvmAcl::authorization(&check_key);
@@ -1061,7 +1134,10 @@ mod test2{
 				Token::Uint(set_height.into()),
 			];
 			let log_bytes = ethabi::encode(&authorization_tokens);
-			EvmAcl::set_authorization(user_b, c_addr, log_bytes).expect("Set authorization failed");
+			assert_noop!(
+				EvmAcl::set_authorization(user_b, c_addr, log_bytes),
+				Error::<Test>::NoSetPermission,
+			);
 
 			// aufs://alice/Web3Tube@read#0x570da6…12f5dc : height
 			let check_key = format!("{}{}@{STR_WRITE}#{:?}", domain_str, path_str, target_addr.clone());

@@ -8,7 +8,6 @@ use fp_evm::Log;
 use hex_literal::hex;
 use frame_support::{
 	dispatch::DispatchResult,
-	traits::GenesisBuild,
 };
 
 use ethabi::{Token, ParamType};
@@ -234,7 +233,8 @@ impl<T: Config> Pallet<T> {
 			ParamType::String,
 			ParamType::FixedBytes(32),
 		];
-		let params = ethabi::decode(&params_type, &log_bytes).map_err(|e|format!("decode failed: {}", e))?;
+		let params = ethabi::decode(&params_type, &log_bytes)
+			.map_err(|e|format!("decode failed: {:?}", e))?;
 
 		let domain = match &params.get(0).ok_or("get param domain failed")?{
 			Token::String(s)=>{
@@ -295,7 +295,8 @@ impl<T: Config> Pallet<T> {
 			if i!= 0{
 				check_dir.push_str(&format!("/{}", sub_dir));
 			}
-			let check_key = format!("{domain}{check_dir}@{STR_WRITE}#{caller_str}");
+			let check_key = format!("{}{}@{}#{}", domain, check_dir, STR_WRITE, caller_str);
+			// let check_key = format!("{domain}{check_dir}@{STR_WRITE}#{caller_str}", domain, check_dir, STR_WRITE, caller_str);
 			// log::info!("{check_key}");
 
 			if let Some(height) = Authorization::<T>::get(&check_key){
@@ -327,7 +328,8 @@ impl<T: Config> Pallet<T> {
 					return Err(Error::<T>::ParseLogFailed)?;
 				}
 			};
-			let key = format!("{domain}{path}@{rw_type_str}#{:?}", target_addr);
+			let key = format!("{}{}@{}#{:?}", domain, path, rw_type_str, target_addr);
+			// let key = format!("{domain}{path}@{rw_type_str}#{:?}", target_addr);
 
 			if (set_height > now) || ( set_height == T::BlockNumber::from(DELETE_AUTHORIZATION_BLOCK_HEIGHT) ){
 				Authorization::<T>::insert(&key, set_height);
@@ -379,7 +381,7 @@ impl<T: Config> Pallet<T> {
 				// log::info!("{}", check_path);
 
 				// aufs://0x0000000000000000000000000000000000000001/Web3Tube@_delegated#read
-				let check_read_key = format!("{}{}@{STR_DELEGATED}#{}", domain, check_path, STR_READ);
+				let check_read_key = format!("{}{}@{}#{}", domain, check_path, STR_DELEGATED, STR_READ);
 				// log::info!("{}", check_read_key);
 				if let Some(addr_vec) = <Delegate<T>>::get(check_read_key){
 					if addr_vec.contains(contract_addr){
@@ -387,7 +389,7 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 
-				let check_write_key = format!("{}{}@{STR_DELEGATED}#{}", domain, check_path, STR_WRITE);
+				let check_write_key = format!("{}{}@{}#{}", domain, check_path, STR_DELEGATED, STR_WRITE);
 				// log::info!("{}", check_write_key);
 				if let Some(addr_vec) = <Delegate<T>>::get(check_write_key){
 					if addr_vec.contains(contract_addr){
@@ -404,7 +406,7 @@ impl<T: Config> Pallet<T> {
 					check_path.push_str(&format!("/{}", sub_path));
 				}
 
-				let check_write_key = format!("{}{}@{STR_DELEGATED}#{}", domain, check_path, STR_WRITE);
+				let check_write_key = format!("{}{}@{}#{}", domain, check_path, STR_DELEGATED, STR_WRITE);
 				if let Some(addr_vec) = <Delegate<T>>::get(check_write_key){
 					if addr_vec.contains(contract_addr){
 						return true;
@@ -425,7 +427,8 @@ impl<T: Config> Pallet<T> {
 			ParamType::Address,
 			ParamType::Uint(32),
 		];
-		let params = ethabi::decode(&params_type, &log_bytes).map_err(|e|format!("pasre log failed: {}", e))?;
+		let params = ethabi::decode(&params_type, &log_bytes)
+			.map_err(|e|format!("pasre log failed: {:?}", e))?;
 
 		let domain = match &params.get(0).ok_or("get param domain failed")?{
 			Token::String(s)=>{ s.clone() }
@@ -488,7 +491,7 @@ impl<T: Config> Pallet<T> {
 			if i != 0{
 				check_path.push_str(&format!("/{}", sub_path));
 			}
-			let check_key = format!("{}{}@{STR_DELEGATED}#{}", domain, check_path, rw_type_str);
+			let check_key = format!("{}{}@{}#{}", domain, check_path, STR_DELEGATED, rw_type_str);
 			// log::info!("{}", check_key);
 			if let Some(addr_vec) = <Delegate<T>>::get(check_key){
 				if addr_vec.contains(contract_addr){
@@ -512,7 +515,7 @@ impl<T: Config> Pallet<T>{
 		if Self::check_delegate_set_permission(&source, &domain){
 			// "aufs://alice/dir1@_delegated#read"
 			if set_type == SET_READ{
-				let key = format!("{}{}@{STR_DELEGATED}#{}", domain, path, STR_READ); 
+				let key = format!("{}{}@{}#{}", domain, path, STR_DELEGATED, STR_READ); 
 				if is_remove{
 					Self::remove_delegate_item(&key, &target_addr);
 
@@ -527,7 +530,7 @@ impl<T: Config> Pallet<T>{
 				}
 			}
 			else if set_type == SET_WRITE{
-				let key = format!("{}{}@{STR_DELEGATED}#{}", domain, path, STR_WRITE); 
+				let key = format!("{}{}@{}#{}", domain, path, STR_DELEGATED, STR_WRITE); 
 				if is_remove{
 					Self::remove_delegate_item(&key, &target_addr);
 
@@ -567,7 +570,8 @@ impl<T: Config> Pallet<T>{
 			ParamType::Bool,
 			ParamType::Address,
 		];
-		let params = ethabi::decode(&params_type, &log_bytes).map_err(|e|format!("parse log failed: {}", e))?;
+		let params = ethabi::decode(&params_type, &log_bytes)
+			.map_err(|e|format!("parse log failed: {:?}", e))?;
 
 		let domain = match &params.get(0).ok_or("get param domain failed")?{
 			Token::String(s)=>{ s.clone() }
@@ -657,7 +661,7 @@ mod test2{
 	// use ethabi::encode;
 
 	use crate as pallet_evm_acl;
-	use frame_support::{parameter_types, assert_noop};
+	use frame_support::{parameter_types, assert_noop, pallet_prelude::GenesisBuild};
 	// use frame_system::EnsureSignedBy;
 	use sp_runtime::{
 		testing::Header,

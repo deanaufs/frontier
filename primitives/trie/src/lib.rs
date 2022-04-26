@@ -212,6 +212,8 @@ pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, tri
 	root: &TrieHash<L>,
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
+	// println!("read_trie_value() root: {:?}", root);
+	// println!("read_trie_value() key: {:?}", key);
 	TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
 }
 

@@ -233,7 +233,10 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 			return Ok(v)
 		}
 
+		println!("TrieBackendStorage::get(): {:?}", key);
 		let backend_value = self.backend.get(key, prefix)?;
+		// println!("key: {:?}", key);
+		// println!("value: {:?}", backend_value);
 		self.proof_recorder.record(key.clone(), backend_value.clone());
 		Ok(backend_value)
 	}
@@ -258,6 +261,7 @@ where
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		// println!("Backend::storage(): {:?}", key);
 		self.0.storage(key)
 	}
 

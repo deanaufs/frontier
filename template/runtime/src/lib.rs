@@ -359,7 +359,9 @@ impl pallet_base_fee::Config for Runtime {
 }
 
 impl pallet_randomness_collective_flip::Config for Runtime {}
-impl pallet_evm_acl::Config for Runtime {}
+impl pallet_evm_acl::Config for Runtime {
+	type Event = Event;
+}
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
@@ -381,7 +383,7 @@ construct_runtime!(
 		DynamicFee: pallet_dynamic_fee::{Pallet, Call, Storage, Config, Inherent},
 		BaseFee: pallet_base_fee::{Pallet, Call, Storage, Config<T>, Event},
 
-		EvmAcl: pallet_evm_acl::{Pallet, Storage, Config},
+		EvmAcl: pallet_evm_acl::{Pallet, Storage, Config<T>, Event<T>},
 	}
 );
 

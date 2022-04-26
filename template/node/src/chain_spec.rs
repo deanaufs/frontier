@@ -250,8 +250,9 @@ fn testnet_genesis(
 			},
 		},
 		ethereum: EthereumConfig {},
-		evm_acl: EvmAclConfig {},
+		// evm_acl: EvmAclConfig {},
 		// aufs: Default::default(),
+		evm_acl: Default::default(),
 		dynamic_fee: Default::default(),
 		base_fee: Default::default(),
 	}

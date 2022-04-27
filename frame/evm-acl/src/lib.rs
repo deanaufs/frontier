@@ -24,7 +24,7 @@ const STR_WRITE: &str = "write";
 const SET_READ :u8 = 1u8;
 const SET_WRITE :u8 = 2u8;
 
-const DELETE_AUTHORIZATION_BLOCK_HEIGHT: u32 = 0u32;
+const PERMANENT_VALID_VALUE: u32 = 0u32;
 const DELETE_URI_BYTES: [u8;32] = [0u8;32];
 
 // event: "$SetURI(string,string,bytes32)"
@@ -33,11 +33,11 @@ const SET_URI_HASH: &[u8] =
 
 // event: $SetAuthorization(string,uint8,address,u32)
 const SET_AUTHORIZATION_HASH: &[u8] = 
-	&hex!("d84f83deb7a98e39ef9d7015a3c1abed076e748b975b2f4fe5e6df34e48adc35");
+	&hex!("2a963f355bb9f7029383552609bb10b31c8878c61fb4e82f2b2fb7e3657ac01c");
 
 // event: $SetDelegate(string,address,uint8)
 const SET_DELEGATE_HASH: &[u8] = 
-	&hex!("b379c9e413b8b3bd0883d3f41fdb792e6358eca100f32ef9ac4a828a2c5f2db9");
+	&hex!("45ad967fa459c27a9ac173e3453ee06d4e3b5e676bcdbcc6829d453d317a7ca1");
 
 const TRANSFER_HASH: &[u8] = 
 	&hex!("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
@@ -148,67 +148,70 @@ pub mod pallet {
 
 	impl<T: Config> pallet_evm::ACLManager for Pallet<T>{
 		fn parse_log(source: H160, log: Log) {
+			let now = <frame_system::Pallet<T>>::block_number();
+			// log::info!(
+			// 	// target: "evm",
+			// 	"♦ Log detail(#{:?}) for {:?}, topics ({}) {:?}, data ({})]",
+			// 	now,
+			// 	log.address,
+			// 	log.topics.len(),
+			// 	log.topics,
+			// 	log.data.len(),
+			// 	// log.data
+			// );
 			if let Some(event_hash) = log.topics.first(){
+				// log::info!("{:?}", event_hash);
 				match event_hash.as_bytes() {
 					SET_URI_HASH =>{
-						if let Err(e) = Self::set_uri(source, log.data){
-							log::info!("set uri failed: {:?}", e);
+						if let Err(e) = Self::set_uri(source, log.address, log.data){
+							log::info!("♦ $SetURI failed: {:?}", e);
 						}
 					},
 					SET_AUTHORIZATION_HASH => {
 						if let Err(e) = Self::set_authorization(source, log.address, log.data){
-							log::info!("set authorization failed: {:?}", e);
+							log::info!("♦ $SetAuthorization failed: {:?}", e);
 						}
 					},
 					SET_DELEGATE_HASH => {
 						if let Err(e) = Self::set_delegate(source, log.data){
-							log::info!("set delegate failed: {:?}", e);
+							log::info!("♦ $SetDelegate failed: {:?}", e);
 						}
 					},
 					TRANSFER_HASH =>{
 						// if let Err(e) = Self::set_authorization(source, log.address, log.data){
 						// 	log::info!("set authorization failed: {}", e);
 						// }
-						log::info!("event: transfer");
+						// log::info!("event: transfer");
 					},
 					_ => {
-						log::info!("undefined event: {:?}", event_hash);
+						// log::info!("undefined event: {:?}", event_hash);
 					},
 				};
 			}
-
-			// log::info!("Caller: {:?}", source);
-			// log::info!(
-			// 	target: "evm",
-			// 	"Inserting log for {:?}, topics ({}) {:?}, data ({}): {:?}]",
-			// 	log.address,
-			// 	log.topics.len(),
-			// 	log.topics,
-			// 	log.data.len(),
-			// 	log.data
-			// );
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	fn set_uri(caller: H160, log_bytes: Vec<u8>)->DispatchResult{
+	fn set_uri(caller: H160, c_addr: H160, log_bytes: Vec<u8>)->DispatchResult{
 
 		let (domain, path, cid_bytes) = Self::parse_set_uri_log(log_bytes)
 			.map_err(|e|{
-				log::info!("parse set_uri log failed: {}", e);
+				log::info!("♦ $SetURI parse log failed: {}", e);
 				Error::<T>::ParseLogFailed
 			})?;
+		// log::info!("{}, {}, {}", domain, path, cid_bytes.len());
 		// log::info!("{}, {}, {:?}", domain, path, cid_bytes);
 
 		// domain: aufs://0x0000000000000000000000000000000000000001
 		// path  : /Web3Youtube/movie1.map4
 		// cid   : 0x086e5134915e1e70bf74fc8a621b706fa98167aae7f50290f0304aa2633c2cc0
-		if Self::check_uri_set_permission(&caller, &domain, &path){
+		if Self::check_uri_set_permission(&caller, &c_addr, &domain, &path){
 			let key = [domain, path].join("");
 			if cid_bytes == DELETE_URI_BYTES {
 				Uri::<T>::remove(&key);
 
+				log::info!("♦ $SetURI remove uri: {:?}", key);
 				Self::deposit_event(Event::<T>::UriRemoved(key));
 				return Ok(());
 			}
@@ -216,6 +219,7 @@ impl<T: Config> Pallet<T> {
 				let value = cid_bytes;
 				Uri::<T>::insert(key.clone(), value.clone());
 
+				log::info!("♦ $SetURI insert uri: {}: {:?}", key, value);
 				Self::deposit_event(Event::<T>::UriSet(key, value));
 				return Ok(());
 			}
@@ -276,7 +280,8 @@ impl<T: Config> Pallet<T> {
 	/// path: "/Web3Tube/dir1/movie.mp4"
 	/// caller: 0x3637ccee721e0b3d9e3712c4c5dcdbc20b232bce
 	/// contract_addr: 0x3a6e65e7d282453e4f11161d2eba3856b4f69931
-	fn check_uri_set_permission(caller: &H160, domain: &str, path: &str)->bool{
+	fn check_uri_set_permission(caller: &H160, c_addr: &H160, domain: &str, path: &str)->bool{
+		// log::info!("{:?}, {:?}, {}{}", caller, c_addr, domain, path);
 		// check if caller is the owner
 		let owner_domain = format!("{}{:?}", AUFS_PREFIX, caller);
 		if domain.eq(&owner_domain){
@@ -284,7 +289,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// check if caller has write authorization
-		let caller_str = format!("{:?}", caller);
+		// let c_addr_str = format!("{:?}", c_addr);
 		let path = String::from(path);
 		let sub_dir_vec = path.split("/").collect::<Vec<&str>>();
 
@@ -295,12 +300,21 @@ impl<T: Config> Pallet<T> {
 			if i!= 0{
 				check_dir.push_str(&format!("/{}", sub_dir));
 			}
-			let check_key = format!("{}{}@{}#{}", domain, check_dir, STR_WRITE, caller_str);
+			let c_addr_str = format!("{:?}", c_addr).to_lowercase();
+			let check_key = format!("{}{}@{}#{}", domain, check_dir, STR_WRITE, c_addr_str);
 			// let check_key = format!("{domain}{check_dir}@{STR_WRITE}#{caller_str}", domain, check_dir, STR_WRITE, caller_str);
-			// log::info!("{check_key}");
+			// log::info!("{}", check_key);
 
 			if let Some(height) = Authorization::<T>::get(&check_key){
-				if height > now{
+				if height > now || height == T::BlockNumber::from(0u32){
+					return true;
+				}
+			}
+
+			let caller_str = format!("{:?}", caller).to_lowercase();
+			let check_key = format!("{}{}@{}#{}", domain, check_dir, STR_WRITE, caller_str);
+			if let Some(height) = Authorization::<T>::get(&check_key){
+				if height > now || height == T::BlockNumber::from(PERMANENT_VALID_VALUE){
 					return true;
 				}
 			}
@@ -313,9 +327,10 @@ impl<T: Config> Pallet<T> {
 	fn set_authorization(caller: H160, contract_addr: H160, log_bytes: Vec<u8>)->DispatchResult{
 		let (domain, path, rw_type, target_addr, set_height) = 
 			Self::parse_authorization_log(log_bytes).map_err(|e|{
-				log::info!("parse authorization log failed: {}", e);
+				log::info!("♦ $SetAuthorization parse log failed: {}", e);
 				Error::<T>::ParseLogFailed
 			})?;
+		// log::info!("{}{}, {}, {}, {:?}", domain, path, rw_type, target_addr, set_height);
 
 		let now = <frame_system::Pallet<T>>::block_number();
 
@@ -328,18 +343,21 @@ impl<T: Config> Pallet<T> {
 					return Err(Error::<T>::ParseLogFailed)?;
 				}
 			};
-			let key = format!("{}{}@{}#{:?}", domain, path, rw_type_str, target_addr);
+			let target_addr_str = format!("{:?}", target_addr).to_lowercase();
+			let key = format!("{}{}@{}#{}", domain, path, rw_type_str, target_addr_str);
 			// let key = format!("{domain}{path}@{rw_type_str}#{:?}", target_addr);
 
-			if (set_height > now) || ( set_height == T::BlockNumber::from(DELETE_AUTHORIZATION_BLOCK_HEIGHT) ){
+			if (set_height > now) || ( set_height == T::BlockNumber::from(PERMANENT_VALID_VALUE) ){
 				Authorization::<T>::insert(&key, set_height);
 
+				log::info!("♦ $SetAuthorization Set: {}, {:?}, {:?}", key, target_addr, set_height);
 				Self::deposit_event(Event::<T>::AuthorizationSet(key, target_addr, T::BlockNumber::from(set_height)));
 				return Ok(());
 			}
 			else{
 				Authorization::<T>::remove(&key);
 
+				log::info!("♦ $SetAuthorization Remove: {}, {:?}, {:?}", key, target_addr, set_height);
 				Self::deposit_event(Event::<T>::AuthorizationRemoved(key, target_addr));
 				return Ok(());
 			}
@@ -357,6 +375,15 @@ impl<T: Config> Pallet<T> {
 		rw_type: u8,
 		target_addr: &H160,
 	)->bool{
+		// log::info!(
+		// 	"caller: {:?}, c_addr: {:?}, {}{}, {}, target_addr: {:?}",
+		// 	caller,
+		// 	contract_addr,
+		// 	domain, path,
+		// 	rw_type,
+		// 	target_addr
+		// );
+
 		// set authorization by owner
 		let owner_domain = format!("{}{:?}", AUFS_PREFIX, caller);
 		if owner_domain.eq(domain){
@@ -383,6 +410,7 @@ impl<T: Config> Pallet<T> {
 				// aufs://0x0000000000000000000000000000000000000001/Web3Tube@_delegated#read
 				let check_read_key = format!("{}{}@{}#{}", domain, check_path, STR_DELEGATED, STR_READ);
 				// log::info!("{}", check_read_key);
+
 				if let Some(addr_vec) = <Delegate<T>>::get(check_read_key){
 					if addr_vec.contains(contract_addr){
 						return true;
@@ -391,6 +419,7 @@ impl<T: Config> Pallet<T> {
 
 				let check_write_key = format!("{}{}@{}#{}", domain, check_path, STR_DELEGATED, STR_WRITE);
 				// log::info!("{}", check_write_key);
+
 				if let Some(addr_vec) = <Delegate<T>>::get(check_write_key){
 					if addr_vec.contains(contract_addr){
 						return true;
@@ -423,9 +452,9 @@ impl<T: Config> Pallet<T> {
 		let params_type = [
 			ParamType::String,
 			ParamType::String,
-			ParamType::Uint(32),
 			ParamType::Address,
-			ParamType::Uint(32),
+			ParamType::Uint(8),
+			ParamType::Uint(256),
 		];
 		let params = ethabi::decode(&params_type, &log_bytes)
 			.map_err(|e|format!("pasre log failed: {:?}", e))?;
@@ -438,7 +467,11 @@ impl<T: Config> Pallet<T> {
 			Token::String(s)=>{ s.clone() }
 			_ => { Err("parse param path failed")?  }
 		};
-		let rw_type = match &params.get(2).ok_or("get param rw_type failed")?{
+		let target_addr = match &params.get(2).ok_or("get param target_address failed")?{
+			Token::Address(addr)=>{ addr.clone() }
+			_ => { Err("parse param target_address failed")?  }
+		};
+		let rw_type = match &params.get(3).ok_or("get param rw_type failed")?{
 			Token::Uint(n)=>{
 				if n == &U256::from(SET_READ){
 					SET_READ
@@ -453,10 +486,6 @@ impl<T: Config> Pallet<T> {
 			_ => {
 				Err("parse param rw_type failed")?
 			}
-		};
-		let target_addr = match &params.get(3).ok_or("get param target_address failed")?{
-			Token::Address(addr)=>{ addr.clone() }
-			_ => { Err("parse param target_address failed")?  }
 		};
 		let height = match &params.get(4).ok_or("get param height failed")?{
 			Token::Uint(n)=>{ T::BlockNumber::from(n.as_u32()) }
@@ -508,9 +537,10 @@ impl<T: Config> Pallet<T>{
 	fn set_delegate(source: H160, log: Vec<u8>)->DispatchResult{
 		let (domain, path, set_type, is_remove, target_addr) = 
 			Self::parse_delegate_log(log).map_err(|e|{
-				log::info!("parse delegate log failed: {}", e);
+				log::info!("♦ $SetDelegate: parse log failed: {}", e);
 				Error::<T>::ParseLogFailed
 			})?;
+		// log::info!("{}{}, {}, {}, {:?}", domain, path, set_type, is_remove, target_addr);
 
 		if Self::check_delegate_set_permission(&source, &domain){
 			// "aufs://alice/dir1@_delegated#read"
@@ -519,12 +549,14 @@ impl<T: Config> Pallet<T>{
 				if is_remove{
 					Self::remove_delegate_item(&key, &target_addr);
 
+					log::info!("♦ $SetDelegate remove: {}, {:?}", key, target_addr);
 					Self::deposit_event(Event::<T>::DelegateRemoved(key, target_addr));
 					return Ok(());
 				}
 				else{
 					Self::append_delegate_item(&key, &target_addr);
 
+					log::info!("♦ $SetDelegate set: {}, {:?}", key, target_addr);
 					Self::deposit_event(Event::<T>::DelegateSet(key, target_addr));
 					return Ok(());
 				}
@@ -534,12 +566,14 @@ impl<T: Config> Pallet<T>{
 				if is_remove{
 					Self::remove_delegate_item(&key, &target_addr);
 
+					log::info!("♦ $SetDelegate remove: {}, {:?}", key, target_addr);
 					Self::deposit_event(Event::<T>::DelegateRemoved(key, target_addr));
 					return Ok(());
 				}
 				else{
 					Self::append_delegate_item(&key, &target_addr);
 
+					log::info!("♦ $SetDelegate set: {}, {:?}", key, target_addr);
 					Self::deposit_event(Event::<T>::DelegateSet(key, target_addr));
 					return Ok(());
 				}
@@ -554,6 +588,7 @@ impl<T: Config> Pallet<T>{
 	}
 
 	fn check_delegate_set_permission(caller: &H160, domain: &str)->bool{
+		// log::info!("caller: {:?}, domain: {}", caller, domain);
 		let owner_domain = format!("{}{:?}", AUFS_PREFIX, caller);
 		if owner_domain.eq(domain){
 			return true;
@@ -566,7 +601,7 @@ impl<T: Config> Pallet<T>{
 		let params_type = [
 			ParamType::String,
 			ParamType::String,
-			ParamType::Uint(32),
+			ParamType::Uint(8),
 			ParamType::Bool,
 			ParamType::Address,
 		];
@@ -653,7 +688,7 @@ mod test2{
 	use super::*;
 
 	use log::*;
-	use std::{io::Write,};
+	use std::{io::Write};
 	use sp_core::H256;
 	use env_logger::Builder;
 	use chrono::Local;
@@ -752,42 +787,31 @@ mod test2{
 	fn set_uri_basic_test(){
 		new_test_ext().execute_with(||{
 			let owner = H160::from(hex!("0000000000000000000000000000000000000001"));
-			// let user = H160::from(hex!("0000000000000000000000000000000000000002"));
+			let c_addr = H160::from(hex!("0000000000000000000000000000000000000002"));
 
 			// onwer insert file
 			let domain_str = format!("aufs://{:?}", owner); // "aufs://0x0000000000000000000000000000000000000001"
 			let path_str = "/Web3Tube/movie1.mp4";
 			let cid_bytes = [1u8;32]; // 0x0101010101010101010101010101010101010101010101010101010101010101
 
-			let tokens = [
-				Token::String(domain_str.to_owned()),
-				Token::String(path_str.to_owned()),
-				Token::FixedBytes(cid_bytes.to_vec()),
-			];
-			let log_bytes = ethabi::encode(&tokens).to_vec();
+			let log_bytes = gen_set_uri_log(&domain_str, path_str, &cid_bytes);
 
 			// "aufs://0x0000000000000000000000000000000000000001/Web3Tube/movie1.mp4";
 			let check_key_1 = format!("{}{}", domain_str, path_str);
 			let value = EvmAcl::uri(&check_key_1);
-			log::info!("before append, uri, {}: {:?}", check_key_1, value);
+			log::info!("before: check uri, {}: {:?}", check_key_1, value);
 			assert_eq!(value, None);
 
-			EvmAcl::set_uri(owner.clone(), log_bytes).expect("set uri failed");
+			EvmAcl::set_uri(owner.clone(), c_addr.clone(), log_bytes).expect("set uri failed");
 
 			let value = EvmAcl::uri(&check_key_1);
-			log::info!("after append, uri: {}: {:?}", check_key_1, value);
+			log::info!("after : check uri: {}: {:?}", check_key_1, value);
 			assert_eq!(value, Some(cid_bytes));
 
 			// delete uri
 			let delete_cid_bytes = DELETE_URI_BYTES;
-			let tokens = [
-				Token::String(domain_str.to_owned()),
-				Token::String(path_str.to_owned()),
-				Token::FixedBytes(delete_cid_bytes.to_vec()),
-			];
-			
-			let log_bytes = ethabi::encode(&tokens).to_vec();
-			EvmAcl::set_uri(owner.clone(), log_bytes).expect("set uri failed");
+			let log_bytes = gen_set_uri_log(&domain_str, path_str, &delete_cid_bytes);
+			EvmAcl::set_uri(owner.clone(), c_addr.clone(), log_bytes).expect("set uri failed");
 
 			let value = EvmAcl::uri(&check_key_1);
 			log::info!("delete valid uri: {}: {:?}", check_key_1, value);
@@ -796,14 +820,8 @@ mod test2{
 			// delete uri which is not exsit
 			let path_not_exist = "/Web2Tube/movie1.mp4";
 			let delete_cid_bytes = DELETE_URI_BYTES;
-			let tokens = [
-				Token::String(domain_str.to_owned()),
-				Token::String(path_not_exist.to_owned()),
-				Token::FixedBytes(delete_cid_bytes.to_vec()),
-			];
-			
-			let log_bytes = ethabi::encode(&tokens).to_vec();
-			EvmAcl::set_uri(owner.clone(), log_bytes).expect("set uri failed");
+			let log_bytes = gen_set_uri_log(&domain_str, path_not_exist, &delete_cid_bytes);
+			EvmAcl::set_uri(owner.clone(), c_addr.clone(), log_bytes).expect("set uri failed");
 
 			let check_key = format!("{}{}", domain_str, path_not_exist);
 			let value = EvmAcl::uri(&check_key);
@@ -815,14 +833,16 @@ mod test2{
 	#[test]
 	fn set_authorization_basic_test(){
 		new_test_ext().execute_with(||{
+			//TODO: 0 authorization check
 
 			let delta_height = 200;
-			// let current_block = System::block_number() + 200;
 			System::set_block_number(System::block_number() + delta_height);
 
 			let from = H160::from(hex!("0000000000000000000000000000000000000001"));
 			let target_addr = H160::from(hex!("0000000000000000000000000000000000000002"));
+			let target_addr_2 = H160::from(hex!("0000000000000000000000000000000000000003"));
 			let c_addr = H160::from(hex!("1111111111111111111111111111111111111111"));
+			let c_addr_2 = H160::from(hex!("2222222222222222222222222222222222222222"));
 
 			// "aufs://0x0000000000000000000000000000000000000001"
 			let domain_str = format!("aufs://{:?}", from);
@@ -830,36 +850,50 @@ mod test2{
 			let set_height = 300u64;
 
 			// read authorization 
-			let rw_type = SET_READ;
-			let tokens = [
-				Token::String(domain_str.to_owned()),
-				Token::String(path_str.to_owned()),
-				Token::Uint(rw_type.into()),
-				// Token::Uint(U256::from(rw_type)),
-				Token::Address(target_addr),
-				Token::Uint(set_height.into()),
-			];
+			// let rw_type = SET_READ;
+			// let tokens = [
+			// 	Token::String(domain_str.to_owned()),
+			// 	Token::String(path_str.to_owned()),
+			// 	Token::Address(target_addr),
+			// 	Token::Uint(rw_type.into()),
+			// 	Token::Uint(set_height.into()),
+			// ];
+			// let log_bytes = ethabi::encode(&tokens).to_vec();
 
-			let log_bytes = ethabi::encode(&tokens).to_vec();
+			let log_bytes = gen_set_authorization_log(
+				&domain_str,
+				path_str,
+				&target_addr,
+				SET_READ,
+				set_height,
+			);
 			EvmAcl::set_authorization(from, c_addr, log_bytes).expect("set failed");
 
 			// example: aufs://alice/Web3Tube@read#0x570da6…12f5dc : height
-			let check_key = format!("{}{}@read#{:?}", domain_str, path_str, target_addr);
+			let check_key = format!("{}{}@{}#{:?}", domain_str, path_str, STR_READ, target_addr);
 			let ret = EvmAcl::authorization(&check_key);
 			assert_eq!(ret, Some(set_height));
 			log::info!("{}: {:?}", check_key, ret);
 
 			// write authorization
-			let rw_type = SET_WRITE;
-			let tokens = [
-				Token::String(domain_str.to_owned()),
-				Token::String(path_str.to_owned()),
-				Token::Uint(rw_type.into()),
-				Token::Address(target_addr),
-				Token::Uint(set_height.into()),
-			];
+			// let rw_type = SET_WRITE;
+			// let tokens = [
+			// 	token::string(domain_str.to_owned()),
+			// 	token::string(path_str.to_owned()),
+			// 	token::address(target_addr),
+			// 	token::uint(rw_type.into()),
+			// 	token::uint(set_height.into()),
+			// ];
 
-			let log_bytes = ethabi::encode(&tokens).to_vec();
+			// let log_bytes = ethabi::encode(&tokens).to_vec();
+			let log_bytes = gen_set_authorization_log(
+				&domain_str,
+				path_str,
+				&target_addr,
+				SET_WRITE,
+				set_height,
+			);
+
 			EvmAcl::set_authorization(from, c_addr, log_bytes).expect("set failed");
 			let check_key = format!("{}{}@write#{:?}", domain_str, path_str, target_addr);
 			let ret = EvmAcl::authorization(&check_key);
@@ -867,22 +901,71 @@ mod test2{
 			log::info!("{}: {:?}", check_key, ret);
 
 			// delete authorization
-			let rw_type = SET_WRITE;
-			let set_height = delta_height - 50;
-			let tokens = [
-				Token::String(domain_str.to_owned()),
-				Token::String(path_str.to_owned()),
-				Token::Uint(rw_type.into()),
-				Token::Address(target_addr),
-				Token::Uint(set_height.into()),
-			];
+			// let rw_type = SET_WRITE;
+			// let tokens = [
+			// 	Token::String(domain_str.to_owned()),
+			// 	Token::String(path_str.to_owned()),
+			// 	Token::Address(target_addr),
+			// 	Token::Uint(rw_type.into()),
+			// 	Token::Uint(set_height.into()),
+			// ];
 
-			let log_bytes = ethabi::encode(&tokens).to_vec();
+			// let log_bytes = ethabi::encode(&tokens).to_vec();
+			let height_before_current = delta_height - 50;
+			let log_bytes = gen_set_authorization_log(
+				&domain_str,
+				path_str,
+				&target_addr,
+				SET_WRITE,
+				height_before_current,
+			);
 			EvmAcl::set_authorization(from, c_addr, log_bytes).expect("set failed");
 			let check_key = format!("{}{}@write#{:?}", domain_str, path_str, target_addr);
 			let ret = EvmAcl::authorization(&check_key);
 			assert_eq!(ret, None);
 			log::info!("{}: {:?}", check_key, ret);
+
+			// 0 authorization
+			// let rw_type = SET_WRITE;
+			// let set_height = 0;
+			// let tokens = [
+			// 	Token::String(domain_str.to_owned()),
+			// 	Token::String(path_str.to_owned()),
+			// 	Token::Address(target_addr_2),
+			// 	Token::Uint(rw_type.into()),
+			// 	Token::Uint(set_height.into()),
+			// ];
+			// let log_bytes = ethabi::encode(&tokens).to_vec();
+			let log_bytes = gen_set_authorization_log(
+				&domain_str,
+				path_str,
+				&target_addr_2,
+				SET_WRITE,
+				PERMANENT_VALID_VALUE as u64,
+			);
+
+			EvmAcl::set_authorization(from, c_addr, log_bytes).expect("set failed");
+			// let check_key = format!("{}{}@write#{:?}", domain_str, path_str, target_addr_2);
+			// let value = EvmAcl::authorization(&check_key);
+			// assert_eq!(value, Some(0));
+
+			let new_cid_bytes = [2u8;32];
+			// let tokens = [
+			// 	Token::String(domain_str.to_owned()),
+			// 	Token::String(path_str.to_owned()),
+			// 	Token::FixedBytes(new_cid_bytes.to_vec()),
+			// ];
+			// let log_bytes = ethabi::encode(&tokens).to_vec();
+			let log_bytes = gen_set_uri_log(
+				&domain_str,
+				path_str,
+				&new_cid_bytes,
+			);
+			EvmAcl::set_uri(target_addr_2, c_addr_2, log_bytes).expect("SetURI failed");
+
+			let check_key = format!("{}{}", domain_str, path_str);
+			let value = EvmAcl::uri(&check_key);
+			assert_eq!(value, Some(new_cid_bytes));
 		});
 	}
 
@@ -1039,8 +1122,8 @@ mod test2{
 			let authorize_tokens = [
 				Token::String(domain_str.to_owned()),
 				Token::String(path_str.to_owned()),
-				Token::Uint(set_value.into()),
 				Token::Address(user.clone()),
+				Token::Uint(set_value.into()),
 				Token::Uint(U256::from(height)),
 			];
 			let log = ethabi::encode(&authorize_tokens);
@@ -1059,8 +1142,8 @@ mod test2{
 			let authorize_tokens = [
 				Token::String(domain_str.to_owned()),
 				Token::String(path_str.to_owned()),
-				Token::Uint(set_value.into()),
 				Token::Address(other_user.clone()),
+				Token::Uint(set_value.into()),
 				Token::Uint(U256::from(height)),
 			];
 			let log = ethabi::encode(&authorize_tokens);
@@ -1113,8 +1196,8 @@ mod test2{
 			let authorization_tokens = [
 				Token::String(domain_str.to_owned()),
 				Token::String(path_str.to_owned()),
-				Token::Uint(authorization_set_value.into()),
 				Token::Address(target_addr.clone()),
+				Token::Uint(authorization_set_value.into()),
 				Token::Uint(set_height.into()),
 			];
 			let log_bytes = ethabi::encode(&authorization_tokens);
@@ -1133,8 +1216,8 @@ mod test2{
 			let authorization_tokens = [
 				Token::String(domain_str.to_owned()),
 				Token::String(path_str.to_owned()),
-				Token::Uint(authorization_set_value.into()),
 				Token::Address(target_addr.clone()),
+				Token::Uint(authorization_set_value.into()),
 				Token::Uint(set_height.into()),
 			];
 			let log_bytes = ethabi::encode(&authorization_tokens);
@@ -1154,6 +1237,298 @@ mod test2{
 				assert_eq!(value, None);
 			}
 		});
+	}
+
+	#[test]
+	fn simple_test1(){
+		new_test_ext().execute_with(||{
+			let a = 	H160::from(hex!("a000000000000000000000000000000000000000"));
+			let c_1 = 	H160::from(hex!("c100000000000000000000000000000000000000"));
+			let c_2 = 	H160::from(hex!("c200000000000000000000000000000000000000"));
+			let c_3 = 	H160::from(hex!("c300000000000000000000000000000000000000"));
+			let b_1 = 	H160::from(hex!("b100000000000000000000000000000000000000"));
+			let b_2 = 	H160::from(hex!("b200000000000000000000000000000000000000"));
+			let b_3 = 	H160::from(hex!("b300000000000000000000000000000000000000"));
+			let c_x = 	H160::from(hex!("0000000000000000000000000000000000000000"));
+			// aufs://0xa000000000000000000000000000000000000000
+			let a_domain = format!("aufs://{:?}", a);
+
+			let default_set_height = 100;
+
+			// a --- c_1  delegate(/dir1, read)
+			//
+			// aufs://0xa000000000000000000000000000000000000000/dir1@_delegated#read
+			let log_bytes = gen_set_delegate_log(
+				&a_domain,
+				"/dir1",
+				SET_READ,
+				false,
+				&c_1,
+			);
+			EvmAcl::set_delegate(a, log_bytes).expect("$SetDelegate failed");
+
+			let check_key = format!("{}{}@_delegated#{}", a_domain, "/dir1", STR_READ);
+			let value = EvmAcl::delegate(&check_key);
+			log::info!("➤ {}: {:?}", check_key, value);
+
+			// c_1 ----> b_1 authorization(/dir1, read, b_1) should success
+			//
+			// aufs://0xa000000000000000000000000000000000000000/dir1@read#0xb100000000000000000000000000000000000000
+			let log_bytes = gen_set_authorization_log(
+				&a_domain,
+				"/dir1",
+				&b_1,
+				SET_READ,
+				default_set_height,
+			);
+			EvmAcl::set_authorization(b_1, c_1, log_bytes).expect("$SetAuthorization failed");
+
+			let check_key = format!("{}{}@{}#{:?}", a_domain, "/dir1", STR_READ, b_1);
+			let value = EvmAcl::authorization(&check_key);
+			log::info!("➤ {}: {:?}", check_key, value);
+
+			// c_1 ----> b_1 authorization(/dir1, write, b_1) should success
+			//
+			// aufs://0xa000000000000000000000000000000000000000/dir1@write#0xb100000000000000000000000000000000000000
+			let log_bytes = gen_set_authorization_log(
+				&a_domain,
+				"/dir1",
+				&b_1,
+				SET_WRITE,
+				default_set_height,
+			);
+			if let Err(e) = EvmAcl::set_authorization(b_1, c_1, log_bytes){
+				log::info!("$SetAuthorization failed: {:?}", e);
+			}
+
+			let check_key = format!("{}{}@{}#{:?}", a_domain, "/dir1", STR_WRITE, b_1);
+			let value = EvmAcl::authorization(&check_key);
+			log::info!("➤ {}: {:?}", check_key, value);
+
+			// c_1 ----> b_2 authorization(/dir1/dir11, read, b_2) should success
+			//
+			// aufs://0xa000000000000000000000000000000000000000/dir1@read#0xb100000000000000000000000000000000000000
+			let log_bytes = gen_set_authorization_log(
+				&a_domain,
+				"/dir1/dir11",
+				&b_2,
+				SET_READ,
+				default_set_height,
+			);
+			EvmAcl::set_authorization(b_2, c_1, log_bytes).expect("$SetAuthorization failed");
+
+			let check_key = format!("{}{}@{}#{:?}", a_domain, "/dir1/dir11", STR_READ, b_2);
+			let value = EvmAcl::authorization(&check_key);
+			log::info!("➤ {}: {:?}", check_key, value);
+
+			// c_1 ----> b_3 authorization(/dir2, read, b_3) should failed
+			// 
+			// aufs://0xa000000000000000000000000000000000000000/dir2@read#0xb100000000000000000000000000000000000000
+			let log_bytes = gen_set_authorization_log(
+				&a_domain,
+				"/dir2",
+				&b_3,
+				SET_READ,
+				default_set_height,
+			);
+			if let Err(e) = EvmAcl::set_authorization(b_3, c_1, log_bytes){
+				log::info!("$SetAuthorization failed: {:?}", e);
+			}
+
+			let check_key = format!("{}{}@{}#{:?}", a_domain, "/dir2", STR_READ, b_3);
+			let value = EvmAcl::authorization(&check_key);
+			log::info!("➤ {}: {:?}", check_key, value);
+		});
+	}
+
+	#[test]
+	fn simple_test2(){
+		// a --- c_1  delegate(/dir1, write)
+		new_test_ext().execute_with(||{
+			let a = 	H160::from(hex!("a000000000000000000000000000000000000000"));
+			let c_1 = 	H160::from(hex!("c100000000000000000000000000000000000000"));
+			let c_2 = 	H160::from(hex!("c200000000000000000000000000000000000000"));
+			let c_3 = 	H160::from(hex!("c300000000000000000000000000000000000000"));
+			let b_1 = 	H160::from(hex!("b100000000000000000000000000000000000000"));
+			let b_2 = 	H160::from(hex!("b200000000000000000000000000000000000000"));
+			let b_3 = 	H160::from(hex!("b300000000000000000000000000000000000000"));
+			let c_x = 	H160::from(hex!("0000000000000000000000000000000000000000"));
+			// aufs://0xa000000000000000000000000000000000000000
+			let a_domain = format!("aufs://{:?}", a);
+
+			let default_set_height = 100;
+
+			// a ----> c_1 delegate(/dir1, c_1, write)
+			// 
+			// aufs://0xa000000000000000000000000000000000000000/dir1@_delegated#write
+			let log_bytes = gen_set_delegate_log(
+				&a_domain,
+				"/dir1",
+				SET_WRITE,
+				false,
+				&c_1,
+			);
+			EvmAcl::set_delegate(a, log_bytes).expect("$SetDelegate failed");
+
+			let check_key = format!("{}{}@_delegated#{}", a_domain, "/dir1", STR_WRITE);
+			let value = EvmAcl::delegate(&check_key);
+			log::info!("➤ {}: {:?}", check_key, value);
+
+			// c_1 ----> b_1 authorization(/dir1, read, b_1)
+			// 
+			// aufs://0xa000000000000000000000000000000000000000/dir1@read#0xb100000000000000000000000000000000000000
+			let log_bytes = gen_set_authorization_log(
+				&a_domain,
+				"/dir1",
+				&b_1,
+				SET_READ,
+				default_set_height,
+			);
+
+			EvmAcl::set_authorization(b_1, c_1, log_bytes).expect("$SetAuthorization failed");
+
+			let check_key = format!("{}{}@{}#{:?}", a_domain, "/dir1", STR_READ, b_1);
+			let value = EvmAcl::authorization(&check_key);
+			log::info!("➤ {}: {:?}", check_key, value);
+
+			// c_1 ----> b_2 authorization(/dir1, write, b_2)
+			// 
+			// aufs://0xa000000000000000000000000000000000000000/dir1@write#0xb100000000000000000000000000000000000000
+			let log_bytes = gen_set_authorization_log(
+				&a_domain,
+				"/dir1",
+				&b_2,
+				SET_WRITE,
+				default_set_height,
+			);
+
+			EvmAcl::set_authorization(b_2, c_1, log_bytes).expect("$SetAuthorization failed");
+
+			let check_key = format!("{}{}@{}#{:?}", a_domain, "/dir1", STR_WRITE, b_2);
+			let value = EvmAcl::authorization(&check_key);
+			log::info!("➤ {}: {:?}", check_key, value);
+		});
+	}
+
+	#[test]
+	fn simple_test3(){
+		// authorization delete test
+		new_test_ext().execute_with(||{
+			let a = 	H160::from(hex!("a000000000000000000000000000000000000000"));
+			let c_1 = 	H160::from(hex!("c100000000000000000000000000000000000000"));
+			let c_2 = 	H160::from(hex!("c200000000000000000000000000000000000000"));
+			let c_3 = 	H160::from(hex!("c300000000000000000000000000000000000000"));
+			let b_1 = 	H160::from(hex!("b100000000000000000000000000000000000000"));
+			let b_2 = 	H160::from(hex!("b200000000000000000000000000000000000000"));
+			let b_3 = 	H160::from(hex!("b300000000000000000000000000000000000000"));
+			let c_x = 	H160::from(hex!("0000000000000000000000000000000000000000"));
+			// aufs://0xa000000000000000000000000000000000000000
+			let a_domain = format!("aufs://{:?}", a);
+
+			let default_set_height = 100;
+
+			let chain_height = 200;
+			System::set_block_number(chain_height);
+			// System::set_block_number(System::block_number() + chain_height);
+
+			// a ----> c_1 delegate(/dir1, c_1, write)
+			// 
+			// aufs://0xa000000000000000000000000000000000000000/dir1@_delegated#write
+			let log_bytes = gen_set_delegate_log(
+				&a_domain,
+				"/dir1",
+				SET_WRITE,
+				false,
+				&c_1,
+			);
+			EvmAcl::set_delegate(a, log_bytes).expect("$SetDelegate failed");
+
+			let check_key = format!("{}{}@_delegated#{}", a_domain, "/dir1", STR_WRITE);
+			let value = EvmAcl::delegate(&check_key);
+			log::info!("➤ {}: {:?}", check_key, value);
+
+			// c_1 ----> b_1 authorization(/dir1, read, b_1) should success
+			// 
+			// aufs://0xa000000000000000000000000000000000000000/dir1@read#0xb100000000000000000000000000000000000000
+			let log_bytes = gen_set_authorization_log(
+				&a_domain,
+				"/dir1",
+				&b_1,
+				SET_READ,
+				chain_height + 100,
+			);
+
+			EvmAcl::set_authorization(b_1, c_1, log_bytes).expect("$SetAuthorization failed");
+
+			let check_key = format!("{}{}@{}#{:?}", a_domain, "/dir1", STR_READ, b_1);
+			let value = EvmAcl::authorization(&check_key);
+			log::info!("➤ {}: {:?}", check_key, value);
+
+			// c_1 ----> b_1 authorization(/dir1, read, b_1) should success
+			// 
+			// aufs://0xa000000000000000000000000000000000000000/dir1@read#0xb100000000000000000000000000000000000000
+			let log_bytes = gen_set_authorization_log(
+				&a_domain,
+				"/dir1",
+				&b_1,
+				SET_READ,
+				chain_height - 100,
+			);
+
+			EvmAcl::set_authorization(b_1, c_1, log_bytes).expect("$SetAuthorization failed");
+
+			let check_key = format!("{}{}@{}#{:?}", a_domain, "/dir1", STR_READ, b_1);
+			let value = EvmAcl::authorization(&check_key);
+			log::info!("➤ {}: {:?}", check_key, value);
+		});
+	}
+
+	fn gen_set_uri_log(domain: &str, path: &str, cid_bytes: &[u8;32])->Vec<u8>{
+		let tokens = [
+			Token::String(domain.to_owned()),
+			Token::String(path.to_owned()),
+			Token::FixedBytes(cid_bytes.to_vec()),
+		];
+		let log_bytes = ethabi::encode(&tokens).to_vec();
+		log_bytes
+	}
+
+	fn gen_set_authorization_log(
+		domain_str: &str,
+		path_str: &str,
+		target_addr: &H160,
+		rw_type: u8,
+		set_height: u64
+	)->Vec<u8>{
+		let tokens = [
+			Token::String(domain_str.to_owned()),
+			Token::String(path_str.to_owned()),
+			Token::Address(target_addr.clone()),
+			Token::Uint(rw_type.into()),
+			Token::Uint(set_height.into()),
+		];
+
+		let log_bytes = ethabi::encode(&tokens).to_vec();
+		log_bytes
+	}
+
+	fn gen_set_delegate_log(
+		domain_str: &str,
+		path_str: &str,
+		set_type: u8,
+		is_remove: bool,
+		target_addr: &H160,
+	)->Vec<u8>{
+		let tokens = [
+			Token::String(domain_str.to_owned()),
+			Token::String(path_str.to_owned()),
+			Token::Uint(set_type.into()),
+			Token::Bool(is_remove),
+			Token::Address(target_addr.clone()),
+		];
+
+		let log_bytes = ethabi::encode(&tokens).to_vec();
+		log_bytes
 	}
 
 	#[test]
@@ -1226,9 +1601,9 @@ mod test2{
 		let params = vec![
 			EventParam{ name: "".to_string(), kind: ParamType::String, indexed: false, },
 			EventParam{ name: "".to_string(), kind: ParamType::String, indexed: false, },
-			EventParam{ name: "".to_string(), kind: ParamType::Uint(32), indexed: false, },
 			EventParam{ name: "".to_string(), kind: ParamType::Address, indexed: false, },
-			EventParam{ name: "".to_string(), kind: ParamType::Uint(32), indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::Uint(8), indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::Uint(256), indexed: false, },
 		];
 
 		let event = ethabi::Event {
@@ -1245,7 +1620,7 @@ mod test2{
 		let params = vec![
 			EventParam{ name: "".to_string(), kind: ParamType::String, indexed: false, },
 			EventParam{ name: "".to_string(), kind: ParamType::String, indexed: false, },
-			EventParam{ name: "".to_string(), kind: ParamType::Uint(32), indexed: false, },
+			EventParam{ name: "".to_string(), kind: ParamType::Uint(8), indexed: false, },
 			EventParam{ name: "".to_string(), kind: ParamType::Bool, indexed: false, },
 			EventParam{ name: "".to_string(), kind: ParamType::Address, indexed: false, },
 		];

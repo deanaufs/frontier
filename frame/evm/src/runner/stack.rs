@@ -188,7 +188,9 @@ impl<T: Config> Runner<T> {
 				log.data
 			);
 			// let base_fee = T::FeeCalculator::min_gas_price();
-			T::ACLManager::parse_log(source, log.clone());
+			if nonce.is_some(){
+				T::ACLManager::parse_log(source, log.clone());
+			}
 			Pallet::<T>::deposit_event(Event::<T>::Log(Log {
 				address: log.address,
 				topics: log.topics.clone(),

@@ -235,7 +235,19 @@ fn testnet_genesis(
 				);
 				map.insert(
 					// H160 address of CI test runner account
-					H160::from_str("f89f0efc01bfbbefee49a28519461afabf21ded0")
+					H160::from_str("bb12978e0ede54f01ce314dfe3c6a46ad793d3db")
+						.expect("internal H160 is valid; qed"),
+					pallet_evm::GenesisAccount {
+						balance: U256::from_str("0x56bc75e2d63100000")
+							.expect("internal U256 is valid; qed"),
+						code: Default::default(),
+						nonce: Default::default(),
+						storage: Default::default(),
+					},
+				);
+				map.insert(
+					// H160 address of CI test runner account
+					H160::from_str("31a93A4E87D6589d45C3d40bE448D25eE0886A55")
 						.expect("internal H160 is valid; qed"),
 					pallet_evm::GenesisAccount {
 						balance: U256::from_str("0x56bc75e2d63100000")

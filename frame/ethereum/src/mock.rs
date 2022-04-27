@@ -49,7 +49,7 @@ frame_support::construct_runtime! {
 		EVM: pallet_evm::{Pallet, Call, Storage, Config, Event<T>},
 		Ethereum: crate::{Pallet, Call, Storage, Event, Origin},
 
-		EvmAcl: pallet_evm_acl::{Pallet, Storage, Config},
+		EvmAcl: pallet_evm_acl::{Pallet, Storage, Config<T>, Event<T>},
 	}
 }
 
@@ -104,7 +104,9 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = ();
 }
 
-impl pallet_evm_acl::Config for Test {}
+impl pallet_evm_acl::Config for Test {
+	type Event = Event;
+}
 
 parameter_types! {
 	pub const MinimumPeriod: u64 = 6000 / 2;

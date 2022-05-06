@@ -30,7 +30,7 @@ use sp_std::{vec::Vec, fmt::Debug};
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub struct PreDigest{
 	// pub authority_index: u32,
-	pub slot: Slot,
+	// pub slot: Slot,
 	pub pub_key_bytes: Vec<u8>,
 	// pub rand_bytes: Vec<u8>,
 	pub vrf_output_bytes: Vec<u8>,

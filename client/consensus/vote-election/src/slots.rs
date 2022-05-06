@@ -91,7 +91,8 @@ impl<B: BlockT> SlotInfo<B> {
 }
 
 /// A stream that returns every time there is a new slot.
-pub(crate) struct Slots<B: BlockT, C, IDP> {
+pub struct Slots<B: BlockT, C, IDP> {
+// pub(crate) struct Slots<B: BlockT, C, IDP> {
 	last_slot: Slot,
 	slot_duration: Duration,
 	inner_delay: Option<Delay>,

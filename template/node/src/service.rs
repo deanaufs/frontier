@@ -12,7 +12,7 @@ use frontier_template_runtime::{self, opaque::Block, RuntimeApi, SLOT_DURATION};
 use futures::StreamExt;
 use sc_cli::SubstrateCli;
 use sc_client_api::{BlockchainEvents, ExecutorProvider};
-use sc_consensus_vote_election::{ImportQueueParams, SlotProportion, StartAuraParams};
+use sc_consensus_vote_election::{ImportQueueParams, SlotProportion};
 // use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 // #[cfg(feature = "manual-seal")]
 // use sc_consensus_manual_seal::{self as manual_seal};
@@ -559,45 +559,38 @@ pub fn new_full(mut config: Configuration, cli: &Cli) -> Result<TaskManager, Ser
 			telemetry.as_ref().map(|x| x.handle()),
 		);
 
-		let can_author_with =
-			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
+		// let can_author_with =
+		// 	sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
 		let slot_duration = sc_consensus_vote_election::slot_duration(&*client)?;
 		let raw_slot_duration = slot_duration.slot_duration();
-		let target_gas_price = cli.run.target_gas_price;
+		// let target_gas_price = cli.run.target_gas_price;
 
-		let ve_author = sc_consensus_vote_election::start_ve_author::<AuraPair, _, _, _, _, _, _, _, _, _, _, _>(
-			StartAuraParams {
-				slot_duration,
-				client: client.clone(),
-				select_chain: select_chain.clone(),
-				block_import: block_import.clone(),
-				proposer_factory,
-				create_inherent_data_providers: move |_, ()| async move {
-					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+		let ve_author = sc_consensus_vote_election::start_author::<AuraPair, _, _, _, _, _, _, _, _, _, _, _>(
+			client.clone(),
+			block_import,
+			proposer_factory,
+			move |_, ()| async move {
+				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-					let slot =
-						sp_consensus_vote_election::inherents::InherentDataProvider::from_timestamp_and_duration(
-							*timestamp,
-							raw_slot_duration,
-						);
+				let slot =
+					sp_consensus_vote_election::inherents::InherentDataProvider::from_timestamp_and_duration(
+						*timestamp,
+						raw_slot_duration,
+					);
 
-					let dynamic_fee =
-						pallet_dynamic_fee::InherentDataProvider(U256::from(target_gas_price));
-
-					Ok((timestamp, slot, dynamic_fee))
-					// Ok((timestamp, slot))
-				},
-				force_authoring,
-				backoff_authoring_blocks,
-				keystore: keystore_container.sync_keystore(),
-				can_author_with,
-				sync_oracle: network.clone(),
-				justification_sync_link: network.clone(),
-				block_proposal_slot_portion: SlotProportion::new(2f32 / 3f32),
-				max_block_proposal_slot_portion: None,
-				telemetry: telemetry.as_ref().map(|x| x.handle()),
+				Ok((timestamp, slot))
 			},
+			network.clone(),
+			network.clone(),
+			force_authoring,
+			backoff_authoring_blocks, 
+			keystore_container.sync_keystore(),
+			SlotProportion::new(2f32 / 3f32),
+			None,
+			telemetry.as_ref().map(|x| x.handle()),
+			select_chain.clone(),
+			network.clone(),
 		)?;
 
 		// the AURA authoring task is considered essential, i.e. if it
@@ -609,55 +602,67 @@ pub fn new_full(mut config: Configuration, cli: &Cli) -> Result<TaskManager, Ser
 
 	// committee worker
 	if role.is_authority() {
-		let proposer_factory = sc_basic_authorship::ProposerFactory::new(
-			task_manager.spawn_handle(),
+		// let proposer_factory = sc_basic_authorship::ProposerFactory::new(
+		// 	task_manager.spawn_handle(),
+		// 	client.clone(),
+		// 	transaction_pool.clone(),
+		// 	// prometheus_registry.as_ref(),
+		// 	None,
+		// 	telemetry.as_ref().map(|x| x.handle()),
+		// );
+
+		// let can_author_with =
+		// 	sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
+
+		// let slot_duration = sc_consensus_vote_election::slot_duration(&*client)?;
+		// let raw_slot_duration = slot_duration.slot_duration();
+		// let target_gas_price = cli.run.target_gas_price;
+
+		let ve_committee = sc_consensus_vote_election::start_committee::<AuraPair, _, _, _, _, _>(
 			client.clone(),
-			transaction_pool.clone(),
-			// prometheus_registry.as_ref(),
-			None,
-			telemetry.as_ref().map(|x| x.handle()),
-		);
-
-		let can_author_with =
-			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
-
-		let slot_duration = sc_consensus_vote_election::slot_duration(&*client)?;
-		let raw_slot_duration = slot_duration.slot_duration();
-		let target_gas_price = cli.run.target_gas_price;
-
-		let ve_committee = sc_consensus_vote_election::start_ve_committee::<AuraPair, _, _, _, _, _, _, _, _, _, _, _>(
-			StartAuraParams {
-				slot_duration,
-				client: client.clone(),
-				select_chain: select_chain.clone(),
-				block_import: block_import.clone(),
-				proposer_factory,
-				create_inherent_data_providers: move |_, ()| async move {
-					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
-
-					let slot =
-						sp_consensus_vote_election::inherents::InherentDataProvider::from_timestamp_and_duration(
-							*timestamp,
-							raw_slot_duration,
-						);
-
-					let dynamic_fee =
-						pallet_dynamic_fee::InherentDataProvider(U256::from(target_gas_price));
-
-					Ok((timestamp, slot, dynamic_fee))
-					// Ok((timestamp, slot))
-				},
-				force_authoring,
-				backoff_authoring_blocks,
-				keystore: keystore_container.sync_keystore(),
-				can_author_with,
-				sync_oracle: network.clone(),
-				justification_sync_link: network.clone(),
-				block_proposal_slot_portion: SlotProportion::new(2f32 / 3f32),
-				max_block_proposal_slot_portion: None,
-				telemetry: telemetry.as_ref().map(|x| x.handle()),
-			},
+			keystore_container.sync_keystore(),
+			select_chain.clone(),
+			network.clone(),
+			network.clone(),
+			// client: client.clone(),
+			// select_chain: select_chain.clone(),
+			// sync_oracle: network.clone(),
+			// ve_link: network.clone(),
 		)?;
+
+		// let ve_committee = sc_consensus_vote_election::start_committee::<AuraPair, _, _, _, _, _, _, _, _, _, _, _>(
+		// 	StartAuraParams {
+		// 		slot_duration,
+		// 		client: client.clone(),
+		// 		select_chain: select_chain.clone(),
+		// 		block_import: block_import.clone(),
+		// 		proposer_factory,
+		// 		create_inherent_data_providers: move |_, ()| async move {
+		// 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+
+		// 			let slot =
+		// 				sp_consensus_vote_election::inherents::InherentDataProvider::from_timestamp_and_duration(
+		// 					*timestamp,
+		// 					raw_slot_duration,
+		// 				);
+
+		// 			let dynamic_fee =
+		// 				pallet_dynamic_fee::InherentDataProvider(U256::from(target_gas_price));
+
+		// 			Ok((timestamp, slot, dynamic_fee))
+		// 			// Ok((timestamp, slot))
+		// 		},
+		// 		force_authoring,
+		// 		backoff_authoring_blocks,
+		// 		keystore: keystore_container.sync_keystore(),
+		// 		can_author_with,
+		// 		sync_oracle: network.clone(),
+		// 		justification_sync_link: network.clone(),
+		// 		block_proposal_slot_portion: SlotProportion::new(2f32 / 3f32),
+		// 		max_block_proposal_slot_portion: None,
+		// 		telemetry: telemetry.as_ref().map(|x| x.handle()),
+		// 	},
+		// )?;
 
 		// the AURA authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.

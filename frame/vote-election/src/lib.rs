@@ -169,35 +169,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Get the current slot from the pre-runtime digests.
 	fn current_slot_from_digests() -> Option<Slot> {
-		// let digest = frame_system::Pallet::<T>::digest();
-		// let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-		// for (id, mut data) in pre_runtime_digests {
-		// 	if id == AURA_ENGINE_ID {
-		// 		return Slot::decode(&mut data).ok()
-		// 	}
-		// }
-
-		// None
-		let maybe_pre_digest: Option<PreDigest> =
-			<frame_system::Pallet<T>>::digest()
-				.logs
-				.iter()
-				.filter_map(|s| s.as_pre_runtime())
-				.filter_map(|(id, mut data)| {
-					if id == AURA_ENGINE_ID {
-						PreDigest::decode(&mut data).ok()
-					} else {
-						None
-					}
-				})
-				.next();
-			
-		if let Some(pre_digest) = maybe_pre_digest{
-			return Some(pre_digest.slot);
-		}
-		else{
-			return None;
-		}
+		None
 	}
 
 	/// Determine the Aura slot-duration based on the Timestamp module configuration.
@@ -298,16 +270,16 @@ impl<T: Config> IsMember<T::AuthorityId> for Pallet<T> {
 }
 
 impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
-	fn on_timestamp_set(moment: T::Moment) {
-		let slot_duration = Self::slot_duration();
-		assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
+	fn on_timestamp_set(_moment: T::Moment) {
+		// let slot_duration = Self::slot_duration();
+		// assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
 
-		let timestamp_slot = moment / slot_duration;
-		let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
+		// let timestamp_slot = moment / slot_duration;
+		// let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
 
-		assert!(
-			CurrentSlot::<T>::get() == timestamp_slot,
-			"Timestamp slot must match `CurrentSlot`"
-		);
+		// assert!(
+		// 	CurrentSlot::<T>::get() == timestamp_slot,
+		// 	"Timestamp slot must match `CurrentSlot`"
+		// );
 	}
 }

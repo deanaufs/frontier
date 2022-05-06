@@ -18,7 +18,7 @@
 
 //! Module implementing the logic for verifying and importing AuRa blocks.
 
-use crate::{aura_err, authorities, find_pre_digest, AuthorityId, Error};
+use crate::{vote_err, authorities, find_pre_digest, AuthorityId, Error};
 use codec::{Codec, Decode, Encode};
 use log::{debug, trace};
 use prometheus_endpoint::Registry;
@@ -74,56 +74,15 @@ fn check_header<C, B: BlockT, P: Pair>(
 	block_hash: B::Hash,
 	parent_hash: B::Hash,
 	authorities: &[AuthorityId<P>],
-) -> Result<CheckedHeader<B::Header, (Slot, DigestItem<B::Hash>)>, Error<B>>
+) -> Result<CheckedHeader<B::Header, (DigestItem<B::Hash>, )>, Error<B>>
 where
 	P::Signature: Codec,
 	C: sc_client_api::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
 {
-	// let seal = header.digest_mut().pop().ok_or_else(|| Error::HeaderUnsealed(hash))?;
-
-	// let sig = seal.as_aura_seal().ok_or_else(|| aura_err(Error::HeaderBadSeal(hash)))?;
-
-	// let pre_digest = find_pre_digest::<B, P::Signature>(&header)?;
-
-	// let slot = pre_digest.slot;
-
-	// if slot > slot_now {
-	// 	header.digest_mut().push(seal);
-	// 	Ok(CheckedHeader::Deferred(header, slot))
-	// } else {
-	// 	// check the signature is valid under the expected authority and
-	// 	// chain state.
-	// 	let expected_author =
-	// 		slot_author::<P>(slot, &authorities).ok_or_else(|| Error::SlotAuthorNotFound)?;
-
-	// 	let pre_hash = header.hash();
-
-	// 	if P::verify(&sig, pre_hash.as_ref(), expected_author) {
-	// 		if check_for_equivocation.check_for_equivocation() {
-	// 			if let Some(equivocation_proof) =
-	// 				check_equivocation(client, slot_now, slot, &header, expected_author)
-	// 					.map_err(Error::Client)?
-	// 			{
-	// 				info!(
-	// 					target: "aura",
-	// 					"Slot author is equivocating at slot {} with headers {:?} and {:?}",
-	// 					slot,
-	// 					equivocation_proof.first_header.hash(),
-	// 					equivocation_proof.second_header.hash(),
-	// 				);
-	// 			}
-	// 		}
-
-	// 		Ok(CheckedHeader::Checked(header, (slot, seal)))
-	// 	} else {
-	// 		Err(Error::BadSignature(hash))
-	// 	}
-	// }
-
 	let seal = header.digest_mut().pop().ok_or_else(|| Error::HeaderUnsealed(block_hash))?;
 
-	let sig = seal.as_aura_seal().ok_or_else(|| aura_err(Error::HeaderBadSeal(block_hash)))?;
+	let sig = seal.as_aura_seal().ok_or_else(|| vote_err(Error::HeaderBadSeal(block_hash)))?;
 
 	let pre_digest = find_pre_digest::<B, P::Signature>(&header)?;
 
@@ -196,37 +155,6 @@ where
 		}
 	}
 
-	// // let parent_hash = header.parent_hash();
-	// for election in election_vec.iter(){
-	// 	let ElectionData{hash, sig_bytes, vote_list, committee_pub_bytes} = election;
-	// 	if *hash != parent_hash{
-	// 		log::info!("Bad election, wrong hash, cur: {}, parent_hash: {}", hash, parent_hash);
-	// 		return Err(Error::BadElection(*hash));
-	// 	}
-
-	// 	if let Ok(sig) = <P::Signature as Decode>::decode(&mut sig_bytes.as_slice()){
-	// 		let mut msg_bytes :Vec<u8> = vec![];
-	// 		msg_bytes.extend(hash.encode().iter());
-	// 		msg_bytes.extend(vote_list.encode().iter());
-
-	// 		let msg = msg_bytes.as_slice();
-
-	// 		if let Ok(verify_public) = <AuthorityId<P> as Decode>::decode(&mut committee_pub_bytes.as_slice()){
-	// 			// verify if the election come from committee
-	// 			if !authorities.contains(&verify_public){
-	// 				log::info!("Election not from committee");
-	// 				return Err(Error::BadElection(*hash));
-	// 			}
-	// 			if !P::verify(&sig, &msg, &verify_public){
-	// 				log::info!("predigest verify failed");
-	// 				return Err(Error::BadSignature(*hash));
-	// 			}
-	// 		}
-	// 	}
-	// }
-
-	let slot = pre_digest.slot;
-
 	let expected_author = match <AuthorityId<P> as Decode>::decode(&mut pre_digest.pub_key_bytes.as_slice()){
 		Ok(author)=> author.clone(),
 		Err(_) => return Err(Error::NoDigestFound),
@@ -234,7 +162,7 @@ where
 
 	let pre_hash = header.hash();
 	if P::verify(&sig, pre_hash.as_ref(), &expected_author) {
-		Ok(CheckedHeader::Checked(header, (slot, seal)))
+		Ok(CheckedHeader::Checked(header, (seal, )))
 	}
 	else{
 		Err(Error::BadSignature(block_hash))
@@ -247,7 +175,7 @@ pub struct AuraVerifier<C, P, CAW, CIDP> {
 	phantom: PhantomData<P>,
 	create_inherent_data_providers: CIDP,
 	can_author_with: CAW,
-	_check_for_equivocation: CheckForEquivocation,
+	check_for_equivocation: CheckForEquivocation,
 	telemetry: Option<TelemetryHandle>,
 }
 
@@ -256,14 +184,14 @@ impl<C, P, CAW, CIDP> AuraVerifier<C, P, CAW, CIDP> {
 		client: Arc<C>,
 		create_inherent_data_providers: CIDP,
 		can_author_with: CAW,
-		_check_for_equivocation: CheckForEquivocation,
+		check_for_equivocation: CheckForEquivocation,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		Self {
 			client,
 			create_inherent_data_providers,
 			can_author_with,
-			_check_for_equivocation,
+			check_for_equivocation,
 			telemetry,
 			phantom: PhantomData,
 		}
@@ -371,14 +299,14 @@ where
 		)
 		.map_err(|e| e.to_string())?;
 		match checked_header {
-			CheckedHeader::Checked(pre_header, (slot, seal)) => {
+			CheckedHeader::Checked(pre_header, (seal, )) => {
 				// if the body is passed through, we need to use the runtime
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = block.body.take() {
 					let new_block = B::new(pre_header.clone(), inner_body);
 
-					inherent_data.aura_replace_inherent_data(slot);
+					// inherent_data.aura_replace_inherent_data(slot);
 
 					// skip the inherents verification if the runtime API is old.
 					if self
@@ -436,15 +364,14 @@ where
 
 				Ok((block, maybe_keys))
 			},
-			CheckedHeader::Deferred(a, b) => {
-				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+			CheckedHeader::Deferred(a) => {
+				debug!(target: "aura", "Checking {:?} failed; {:?}.", hash, a);
 				telemetry!(
 					self.telemetry;
 					CONSENSUS_DEBUG;
 					"aura.header_too_far_in_future";
 					"hash" => ?hash,
 					"a" => ?a,
-					"b" => ?b,
 				);
 				Err(format!("Header {:?} rejected: too far in the future", hash))
 			},

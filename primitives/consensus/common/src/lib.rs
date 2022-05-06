@@ -243,6 +243,9 @@ pub trait SyncOracle<B: BlockT> {
 	/// Returns true if so.
 	fn is_offline(&mut self) -> bool;
 
+	// fn ve_request(&mut self, _: VoteElectionRequest<B>);
+}
+pub trait VELink<B: BlockT>{
 	fn ve_request(&mut self, _: VoteElectionRequest<B>);
 }
 
@@ -257,6 +260,10 @@ impl<B: BlockT> SyncOracle<B> for NoNetwork {
 	fn is_offline(&mut self) -> bool {
 		false
 	}
+	// fn ve_request(&mut self, _: VoteElectionRequest<B>){}
+}
+
+impl<B: BlockT> VELink<B> for NoNetwork {
 	fn ve_request(&mut self, _: VoteElectionRequest<B>){}
 }
 
@@ -273,6 +280,16 @@ where
 		<&T>::is_offline(&mut &**self)
 	}
 
+	// fn ve_request(&mut self, request: VoteElectionRequest<B>){
+	// 	<&T>::ve_request(&mut &**self, request)
+	// }
+}
+
+impl<B:BlockT, T> VELink<B> for Arc<T>
+where
+	T: ?Sized,
+	for<'r> &'r T: VELink<B>,
+{
 	fn ve_request(&mut self, request: VoteElectionRequest<B>){
 		<&T>::ve_request(&mut &**self, request)
 	}

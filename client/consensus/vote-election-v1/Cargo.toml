@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-vote-election"
-version = "0.1.0-dev"
+version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Generic slots-based utilities for consensus"
 edition = "2018"
@@ -26,9 +26,8 @@ sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-bu
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-# sp-consensus-vote-election = { version = "0.2.0-dev", package = "sp-consensus-vote-election-v2", path = "../../../primitives/consensus/vote-election-v2" }
 sp-consensus-vote-election = { version = "0.10.0-dev", path = "../../../primitives/consensus/vote-election" }
-sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
+sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-keystore = { version = "0.10.0-dev", path = "../../../primitives/keystore" }
 sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
@@ -49,7 +48,7 @@ impl-trait-for-tuples = "0.2.1"
 async-trait = "0.1.50"
 rand = "0.7.0"
 num-bigint = "0.2.3"
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev"}
+prometheus-endpoint = { version = "0.9.0", package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus" }
 libp2p = { version = "0.37.1", default-features = false }
 getrandom = { version = "0.2", features = ["js"], optional = true }
 derive_more = "0.99.2"

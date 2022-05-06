@@ -1281,6 +1281,9 @@ impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle<B> for NetworkSer
 		self.num_connected.load(Ordering::Relaxed) == 0
 	}
 
+}
+
+impl<B: BlockT + 'static, H: ExHashT> sp_consensus::VELink<B> for NetworkService<B, H> {
 	fn ve_request(&mut self, request:VoteElectionRequest<B>){
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::VoteElectionRequest(request));
 	}
@@ -1295,6 +1298,9 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle<B> for &'a Ne
 		self.num_connected.load(Ordering::Relaxed) == 0
 	}
 
+}
+
+impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::VELink<B> for &'a NetworkService<B, H> {
 	fn ve_request(&mut self, request:VoteElectionRequest<B>){
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::VoteElectionRequest(request));
 	}

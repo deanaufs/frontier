@@ -24,5 +24,7 @@ members = [
 
 	"template/node",
 	"template/runtime",
+
+	"client/consensus/vote-election",
 ]
 resolver = "2"

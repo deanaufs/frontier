@@ -18,7 +18,7 @@
 
 //! Module implementing the logic for verifying and importing AuRa blocks.
 
-use crate::{vote_err, authorities, find_pre_digest, AuthorityId, Error};
+use crate::{aura_err, authorities, find_pre_digest, AuthorityId, Error};
 use codec::{Codec, Decode, Encode};
 use log::{debug, trace};
 use prometheus_endpoint::Registry;
@@ -74,7 +74,7 @@ fn check_header<C, B: BlockT, P: Pair>(
 	block_hash: B::Hash,
 	parent_hash: B::Hash,
 	authorities: &[AuthorityId<P>],
-) -> Result<CheckedHeader<B::Header, (Slot, DigestItem)>, Error<B>>
+) -> Result<CheckedHeader<B::Header, (Slot, DigestItem<B::Hash>)>, Error<B>>
 where
 	P::Signature: Codec,
 	C: sc_client_api::backend::AuxStore,
@@ -123,7 +123,7 @@ where
 
 	let seal = header.digest_mut().pop().ok_or_else(|| Error::HeaderUnsealed(block_hash))?;
 
-	let sig = seal.as_aura_seal().ok_or_else(|| vote_err(Error::HeaderBadSeal(block_hash)))?;
+	let sig = seal.as_aura_seal().ok_or_else(|| aura_err(Error::HeaderBadSeal(block_hash)))?;
 
 	let pre_digest = find_pre_digest::<B, P::Signature>(&header)?;
 
@@ -247,7 +247,7 @@ pub struct AuraVerifier<C, P, CAW, CIDP> {
 	phantom: PhantomData<P>,
 	create_inherent_data_providers: CIDP,
 	can_author_with: CAW,
-	check_for_equivocation: CheckForEquivocation,
+	_check_for_equivocation: CheckForEquivocation,
 	telemetry: Option<TelemetryHandle>,
 }
 
@@ -256,14 +256,14 @@ impl<C, P, CAW, CIDP> AuraVerifier<C, P, CAW, CIDP> {
 		client: Arc<C>,
 		create_inherent_data_providers: CIDP,
 		can_author_with: CAW,
-		check_for_equivocation: CheckForEquivocation,
+		_check_for_equivocation: CheckForEquivocation,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		Self {
 			client,
 			create_inherent_data_providers,
 			can_author_with,
-			check_for_equivocation,
+			_check_for_equivocation,
 			telemetry,
 			phantom: PhantomData,
 		}

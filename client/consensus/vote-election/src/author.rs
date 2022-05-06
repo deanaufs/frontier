@@ -1,6 +1,6 @@
 use crate::{
-	slots, slot_worker, import_queue, utils,
-    AuthorityId, authorities, find_pre_digest, MAX_VOTE_RANK, COMMITTEE_TIMEOUT,
+	slot_worker, import_queue, utils,
+    AuthorityId, authorities, MAX_VOTE_RANK, COMMITTEE_TIMEOUT, PROPOSAL_TIMEOUT,
 };
 
 use codec::{Decode, Encode};
@@ -10,9 +10,7 @@ use std::{
 	convert::{TryFrom, TryInto},
     sync::Arc,
     fmt::Debug,
-	// marker::PhantomData,
     time::{SystemTime, Duration},
-    // collections::{BTreeMap, HashMap},
 	pin::Pin,
 };
 
@@ -27,9 +25,9 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr, vrf::VRFSignature};
 
 use sp_core::crypto::{Pair, Public};
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::{AppKey, AppPublic, ByteArray};
+use sp_application_crypto::{AppKey, AppPublic};
 use sp_blockchain::{HeaderBackend};
-use sp_inherents::CreateInherentDataProviders;
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
     generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
@@ -56,10 +54,10 @@ pub use sp_consensus_vote_election::{
 use sc_consensus::{BlockImport, BlockImportParams, StateAction, ForkChoiceStrategy};
 use sc_telemetry::{TelemetryHandle};
 
-use slots::Slots;
+// use slots::Slots;
 use slot_worker::{
 	// BackoffAuthoringBlocksStrategy, SlotInfo, StorageChanges,
-	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, SlotInfo, StorageChanges,
+	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, StorageChanges,
 	SimpleSlotWorker,
 	// ElectionWeightInfo,
 };
@@ -86,7 +84,7 @@ pub struct StateInfo<B: BlockT, P: Pair>{
 	election_vec: Vec<ElectionData<B>>,
 }
 
-pub struct AuthorWorker<P, B, C, E, I, L, BS, SO, VL, CIDP, SC>
+pub struct AuthorWorker<P, B, C, E, I, L, BS, SO, VL, CIDP>
 where
 	B: BlockT,
 	P: Pair,
@@ -103,7 +101,9 @@ where
 	pub max_block_proposal_slot_portion: Option<SlotProportion>,
 	pub telemetry: Option<TelemetryHandle>,
 
-	pub slots: Slots<B, SC, CIDP>,
+	pub create_inherent_data_providers: CIDP,
+	// pub slots: Slots<B, SC, CIDP>,
+
 	pub vote_link: VL,
 	pub state_info: Option<StateInfo<B, P>>,
 }
@@ -121,7 +121,7 @@ where
 // 	VL: VoteLink<B> + Send + Clone,
 
 // #[async_trait::async_trait]
-impl<P, B, C, E, I, L, BS, SO, SC, VL, CIDP, Error> AuthorWorker<P, B, C, E, I, L, BS, SO, VL, CIDP, SC> 
+impl<P, B, C, E, I, L, BS, SO, VL, CIDP, Error> AuthorWorker<P, B, C, E, I, L, BS, SO, VL, CIDP> 
 where
 	B: BlockT,
 	P: Pair + Send + Sync,
@@ -140,7 +140,7 @@ where
 	// PF: Environment<B, Error = Error> + Send + Sync + 'static,
 	// PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	SO: SyncOracle<B> + Send + Sync + Clone,
-	SC: SelectChain<B>,
+	// SC: SelectChain<B>,
 	L: sc_consensus::JustificationSyncLink<B>,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
@@ -153,6 +153,9 @@ where
 	// 		state_info: None,
 	// 	}
     // }
+
+	// type Claim = (PreDigest, P::Public);
+	// type EpochData = Vec<AuthorityId<P>>;
 
 	pub fn reset_state_info(&mut self, cur_header: &B::Header)->Result<(), String>{
 		// basic state_info
@@ -183,16 +186,17 @@ where
 		Ok(())
 	}
 
-    fn propagate_vote_and_get_vrf(&mut self, cur_header: &B::Header)->Result<(u128, VRFSignature), String>{
+    fn generate_vrf_and_propagate(&mut self, cur_header: &B::Header)->Result<(u128, VRFSignature), String>{
+    // fn propagate_vote_and_get_vrf(&mut self, cur_header: &B::Header)->Result<(u128, VRFSignature), String>{
 		let state_info = self.state_info.as_ref().ok_or(format!("no state info"))?;
 
-		let (vrf_num, vrf_sig) = match self.generate_author_vrf_data(&cur_header.hash()){
-			Ok(x)=>{
+		let (vrf_num, vrf_sig) = match self.generate_vrf_data(&cur_header.hash()){
+			Ok(v)=>{
 				log::info!(
 					"Author.S1, gen vrf u128: 0x{:0>32X}, #{} ({})",
-					x.0, cur_header.number(), cur_header.hash(),
+					v.0, cur_header.number(), cur_header.hash(),
 				);
-				x
+				v
 			},
 			Err(e)=>{
 				// log::warn!("Author, generate vrf failed: {}", e);
@@ -211,7 +215,7 @@ where
 		Ok((vrf_num, vrf_sig))
     }
 
-	fn generate_author_vrf_data(&self, cur_hash: &B::Hash)->Result<(u128, VRFSignature), String>{
+	fn generate_vrf_data(&self, cur_hash: &B::Hash)->Result<(u128, VRFSignature), String>{
 		let sr25519_public_keys = SyncCryptoStore::sr25519_public_keys(
 			&*self.keystore, 
 			sp_application_crypto::key_types::AURA
@@ -250,7 +254,7 @@ where
 	}
 
     fn recv_election_and_update_weight(&mut self, election: &ElectionData<B>)->Result<u64, String>{
-		let state_info = self.state_info.as_ref().ok_or(format!("no state info"))?;
+		let state_info = self.state_info.as_ref().ok_or(format!("state info not exist"))?;
 		if election.block_hash != state_info.cur_header.hash(){
 			log::info!(
 				"Author: election hash dismatch: cur: #{} ({}), recv: {}",
@@ -345,140 +349,40 @@ where
 		}
 	}
 
-	async fn proposal_block(&mut self, vrf_sig: VRFSignature)->Result<(), String>{
-		let state_info = self.state_info.as_ref().cloned().ok_or(format!("no state info"))?;
-		if state_info.cur_weight < state_info.max_weight{
-			log::info!(
-				"Author.S1: timeout, prepare block at: #{} ({})",
-				state_info.cur_header.number(),
-				state_info.cur_header.hash(),
-			);
-			if let Ok(slot_info) = self.slots.default_slot().await{
-				let _ = self.produce_block(
-					slot_info,
-					&state_info.cur_header,
-					&vrf_sig,
-					// &state_info.vrf_signature,
-					state_info.election_vec.clone(),
-				).await;
-			}
-			// log::info!("produce block");
-		}
-		else{
-			log::info!(
-				"Author.S1: timeout, no weight prepare block at: #{} ({})",
-				state_info.cur_header.number(),
-				state_info.cur_header.hash(),
-			);
-		}
-		Ok(())
-	}
-}
-
-// impl<B, C, P, VL> slot_worker::SimpleSlotWorker<B> for AuthorWorker<B, C, P, VL>
-// where
-// 	// A: Codec + Debug,
-// 	P: Pair + Send + Sync,
-// 	P::Public: AppPublic + Encode + Decode + Debug,
-// 	P::Signature: Encode + Decode,
-// 	// A: AuthorityId<P>,
-// 	B: BlockT,
-// 	C: ProvideRuntimeApi<B> + BlockchainEvents<B> + BlockOf + Sync + Send + 'static, 
-// 	C::Api: VoteApi<B, AuthorityId<P>>,
-// 	VL: VoteLink<B> + Send + Clone,
-
-impl<P, B, C, E, I, L, BS, SO, SC, VL, CIDP, Error> slot_worker::SimpleSlotWorker<B>
-	for AuthorWorker<P, B, C, E, I, L, BS, SO, VL, CIDP, SC> 
-where
-	P: Pair + Send + Sync,
-	P::Public: AppPublic + Encode + Decode + Debug,
-	P::Signature: TryFrom<Vec<u8>> + Encode + Decode,
-	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockchainEvents<B> + HeaderBackend<B> + BlockOf + Sync + Send + 'static, 
-	C::Api: VoteApi<B, AuthorityId<P>>,
-	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	E: Environment<B, Error = Error>,
-	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	L: sc_consensus::JustificationSyncLink<B>,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
-	SO: SyncOracle<B> + Send + Sync + Clone,
-	SC: SelectChain<B>,
-	// PF: Environment<B, Error = Error> + Send + Sync + 'static,
-	// PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	VL: VoteLink<B> + Send + Clone,
-	CIDP: CreateInherentDataProviders<B, ()> + Send,
-	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
-	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
-{
-	type BlockImport = I;
-	type SyncOracle = SO;
-	type JustificationSyncLink = L;
-	type CreateProposer =
-		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
-	type Proposer = E::Proposer;
-	type Claim = (PreDigest, P::Public);
-	// type Claim = P::Public;
-	type EpochData = Vec<AuthorityId<P>>;
-
-	fn logging_target(&self) -> &'static str {
-		"aura"
-	}
-
-	fn block_import(&mut self) -> &mut Self::BlockImport {
-		&mut self.block_import
-	}
-
-	// fn block_notification_stream(&self)->ImportNotifications<B>{
-	// 	self.client.import_notification_stream()
-	// }
-
-	fn epoch_data(
-		&self,
-		header: &B::Header,
-		_slot: Slot,
-	) -> Result<Self::EpochData, sp_consensus::Error> {
-		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
-	}
-
-	fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize> {
-		Some(epoch_data.len())
-	}
-
-	// fn claim_slot(
-	// 	&mut self,
-	// 	_header: &B::Header,
-	// 	slot: Slot,
-	// 	_epoch_data: &Self::EpochData,
-	// ) -> Option<Self::Claim> {
-	// 	let sr25519_public_keys = SyncCryptoStore::sr25519_public_keys(
-	// 		&*self.keystore, 
-	// 		sp_application_crypto::key_types::AURA
-	// 	);
-
-	// 	if sr25519_public_keys.len() > 0 {
-
-	// 		let pub_bytes = sr25519_public_keys[0].to_raw_vec();
-	// 		if let Ok(author) = <AuthorityId<P> as Decode>::decode(&mut pub_bytes.as_slice()){
-	// 			// let pre_digest = PreDigest{slot: slot, public: author.to_raw_vec()};
-	// 			let pre_digest = PreDigest{
-	// 				slot,
-	// 				rand_bytes: vec![],
-	// 				pub_bytes: author.to_raw_vec(),
-	// 				election_bytes: vec![],
-	// 			};
-	// 			return Some((pre_digest, author.clone()));
+	// async fn proposal_block_v1(&mut self, vrf_sig: VRFSignature)->Result<(), String>{
+	// 	let state_info = self.state_info.as_ref().cloned().ok_or(format!("no state info"))?;
+	// 	if state_info.cur_weight < state_info.max_weight{
+	// 		log::info!(
+	// 			"Author.S1: timeout, prepare block at: #{} ({})",
+	// 			state_info.cur_header.number(),
+	// 			state_info.cur_header.hash(),
+	// 		);
+	// 		if let Ok(slot_info) = self.slots.default_slot().await{
+	// 			let _ = self.produce_block(
+	// 				slot_info,
+	// 				&state_info.cur_header,
+	// 				&vrf_sig,
+	// 				// &state_info.vrf_signature,
+	// 				state_info.election_vec.clone(),
+	// 			).await;
 	// 		}
+	// 		// log::info!("produce block");
 	// 	}
-
-	// 	None
+	// 	else{
+	// 		log::info!(
+	// 			"Author.S1: timeout, no weight prepare block at: #{} ({})",
+	// 			state_info.cur_header.number(),
+	// 			state_info.cur_header.hash(),
+	// 		);
+	// 	}
+	// 	Ok(())
 	// }
 
-	fn claim_slot(
+	fn claim(
 		&mut self,
-		slot: Slot,
 		vrf_sig: &VRFSignature,
 		election_vec: Vec<ElectionData<B>>,
-	) -> Option<Self::Claim> {
+	) -> Option<(PreDigest, P::Public)> {
 		let sr25519_public_keys = SyncCryptoStore::sr25519_public_keys(
 			&*self.keystore, 
 			sp_application_crypto::key_types::AURA
@@ -489,7 +393,7 @@ where
 			let pub_bytes = sr25519_public_keys[0].to_raw_vec();
 			if let Ok(author) = <AuthorityId<P> as Decode>::decode(&mut pub_bytes.as_slice()){
 				let pre_digest = PreDigest{
-					slot,
+					// slot,
 					// rand_bytes: rand_bytes,
 					pub_key_bytes: author.to_raw_vec(),
 					vrf_output_bytes: vrf_sig.output.to_bytes().encode(),
@@ -504,34 +408,19 @@ where
 		None
 	}
 
-	// fn is_committee(&mut self, hash: &B::Hash)->bool{
-	// 	let committee = match authorities(self.client.as_ref(), &BlockId::Hash(hash.clone())){
-	// 		Ok(x)=>x,
-	// 		Err(_)=> return false
-	// 	};
-
-	// 	for author in committee.iter(){
-	// 		if SyncCryptoStore::has_keys(
-	// 			&*self.keystore,
-	// 			&[(author.to_raw_vec(), sp_application_crypto::key_types::AURA)],
-	// 		){
-	// 			return true;
-	// 		}
-	// 	}
-	// 	return false;
-	// }
-
-	// add by user
-	fn notify_slot(&self, _header: &B::Header, _slot: Slot, _epoch_data: &Self::EpochData) {
-	}
-
 	fn pre_digest_data(
 		&self,
-		_slot: Slot,
-		claim: &Self::Claim,
-	) -> Vec<sp_runtime::DigestItem> {
+		claim: &(PreDigest, P::Public),
+	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		// vec![<DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot.clone())]
-		vec![<DigestItem as CompatibleDigestItem<P::Signature>>::aura_pre_digest(claim.0.clone())]
+		vec![<DigestItem<B::Hash> as CompatibleDigestItem<P::Signature>>::aura_pre_digest(claim.0.clone())]
+	}
+
+	fn epoch_data(
+		&self,
+		header: &B::Header,
+	) -> Result<Vec<AuthorityId<P>>, sp_consensus::Error> {
+		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
 	}
 
 	fn block_import_params(
@@ -542,8 +431,8 @@ where
 				&B::Hash,
 				Vec<B::Extrinsic>,
 				StorageChanges<sp_api::TransactionFor<C, B>, B>,
-				Self::Claim,
-				Self::EpochData,
+				(PreDigest, P::Public),
+				Vec<AuthorityId<P>>,
 			) -> Result<
 				sc_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>,
 				sp_consensus::Error,
@@ -575,7 +464,7 @@ where
 				.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
 
 			let signature_digest_item =
-				<DigestItem as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
+				<DigestItem<B::Hash> as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
 
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(signature_digest_item);
@@ -588,63 +477,436 @@ where
 		})
 	}
 
-	fn force_authoring(&self) -> bool {
-		self.force_authoring
-	}
-
-	fn should_backoff(&self, slot: Slot, chain_head: &B::Header) -> bool {
-		if let Some(ref strategy) = self.backoff_authoring_blocks {
-			if let Ok(pre_digest) = find_pre_digest::<B, P::Signature>(chain_head) {
-				let chain_head_slot = pre_digest.slot;
-				return strategy.should_backoff(
-					*chain_head.number(),
-					chain_head_slot,
-					self.client.info().finalized_number,
-					slot,
-					self.logging_target(),
-				)
-			}
-		}
-		false
-	}
-
-	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {
-		&mut self.sync_oracle
-	}
-
-	// fn vote_link(&mut self) -> &mut Self::VoteLink{
-	// 	&mut self.vote_link
-	// }
-
-	fn justification_sync_link(&mut self) -> &mut Self::JustificationSyncLink {
-		&mut self.justification_sync_link
-	}
-
-	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
+	fn proposer(&mut self, header: &B::Header) -> 
+		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>
+	{
 		Box::pin(
 			self.env
-				.init(block)
+				.init(header)
 				.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)).into()),
 		)
 	}
 
-	fn telemetry(&self) -> Option<TelemetryHandle> {
-		self.telemetry.clone()
-	}
+	async fn proposal_block(&mut self, vrf_sig: VRFSignature)->Result<(), String>{
+		// let state_info = self.state_info.as_ref().ok_or(format!("no state info"))?;
+		let state_info = self.state_info.clone().ok_or(format!("no state info"))?;
 
-	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> std::time::Duration {
-		let parent_slot = find_pre_digest::<B, P::Signature>(&slot_info.chain_head).ok().map(|d| d.slot);
+		if state_info.cur_weight < state_info.max_weight{
+			log::info!(
+				target: "ve-consensus",
+				"Author.S1: timeout, prepare block at: #{} ({})",
+				state_info.cur_header.number(),
+				state_info.cur_header.hash(),
+			);
 
-		slot_worker::proposing_remaining_duration(
-			parent_slot,
-			slot_info,
-			&self.block_proposal_slot_portion,
-			self.max_block_proposal_slot_portion.as_ref(),
-			slot_worker::SlotLenienceType::Exponential,
-			self.logging_target(),
-		)
+			// build block
+			let proposing_remaining_duration = Duration::from_millis(PROPOSAL_TIMEOUT);
+
+			let parent_header = state_info.cur_header.clone();
+
+			let epoch_data = match self.epoch_data(&parent_header) {
+				Ok(epoch_data) => epoch_data,
+				Err(err) => {
+					log::warn!(
+						target: "ve-consensus",
+						"Unable to fetch epoch data at block {:?}: {:?}",
+						parent_header.hash(),
+						// slot_info.chain_head.hash(),
+						err,
+					);
+
+					return Err(format!("Unable to get epoch data: {:?}", err))?;
+				},
+			};
+
+			// logs
+			// let claim = self.claim_slot(slot_info.slot, vrf_sig, election_vec)?;
+			// let logs = self.pre_digest_data(slot, &claim);
+			let authorities_len = epoch_data.len();
+
+			if !self.force_authoring &&
+				self.sync_oracle.is_offline() &&
+				(authorities_len > 1)
+			{
+				log::debug!(target: "ve-consensus", "Skipping proposal. Waiting for the network.");
+				return Err("skip proposal")?;
+			}
+
+			let claim = self.claim(&vrf_sig, state_info.election_vec).ok_or("Get claim failed")?;
+			let logs = self.pre_digest_data(&claim);
+
+			let proposer = match self.proposer(&parent_header).await {
+				Ok(p) => p,
+				Err(err) => {
+					log::warn!(
+						target: "ve-consensus",
+						"Unable to author block prev: {}: {:?}", parent_header.hash(), err,
+					);
+
+					return Err(format!("Unable to author block prev: {}", err))?;
+				},
+			};
+
+			// deadline our production to 98% of the total time left for proposing. As we deadline
+			// the proposing below to the same total time left, the 2% margin should be enough for
+			// the result to be returned.
+			let inherent_data_providers = self
+				.create_inherent_data_providers
+				.create_inherent_data_providers(state_info.cur_header.hash(), ())
+				.await
+				.map_err(|e|format!("Create inherent provider failed: {}", e))?;
+
+			let inherent_data = inherent_data_providers
+				.create_inherent_data()
+				.map_err(|e|format!("crate inherent data failed: {}", e))?;
+
+			let proposing = proposer
+				.propose(
+					inherent_data,
+					sp_runtime::generic::Digest { logs },
+					proposing_remaining_duration.mul_f32(0.98),
+					None,
+				)
+				.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
+
+			let proposal = match proposing.await{
+				Ok(p) => p,
+				Err(err) => {
+					log::warn!(target: "ve-consensus", "Proposing failed: {:?}", err);
+					return Err(format!("proposing failed: {}", err))?;
+				}
+			};
+
+
+			let (block, storage_proof) = (proposal.block, proposal.proof);
+			let (header, body) = block.deconstruct();
+			let header_num = *header.number();
+			let header_hash = header.hash();
+			let parent_hash = *header.parent_hash();
+
+			let block_import_params_maker = self.block_import_params();
+			let block_import_params = match block_import_params_maker(
+				header,
+				&header_hash,
+				body.clone(),
+				proposal.storage_changes,
+				claim,
+				epoch_data,
+			) {
+				Ok(bi) => bi,
+				Err(err) => {
+					log::warn!(
+						target: "ve-consensus",
+						"Failed to create block import params: {:?}",
+						err
+					);
+					return Err(format!("failed to create block import params: {:?}", err))?;
+				},
+			};
+
+			log::info!(
+				target: "ve-consensus",
+				"🔖 Pre-sealed block at {}. Hash now {}, previously {}.",
+				header_num,
+				block_import_params.post_hash(),
+				header_hash,
+			);
+
+			self.block_import
+				.import_block(block_import_params, Default::default())
+				.await
+				.map_err(|e|format!("Import block failed: {}", e))?;
+
+			// self.produce_block(
+			// 	slot_info,
+			// 	&state_info.cur_header,
+			// 	&vrf_sig,
+			// 	// &state_info.vrf_signature,
+			// 	state_info.election_vec.clone(),
+			// ).await.map_err(|e|format!("produce block failed: {}", e))?;
+		}
+		else{
+			log::info!(
+				target: "ve-consensus",
+				"Author.S1: timeout, no weight prepare block at: #{} ({})",
+				state_info.cur_header.number(),
+				state_info.cur_header.hash(),
+			);
+		}
+		Ok(())
 	}
 }
+
+// impl<B, C, P, VL> slot_worker::SimpleSlotWorker<B> for AuthorWorker<B, C, P, VL>
+// where
+// 	// A: Codec + Debug,
+// 	P: Pair + Send + Sync,
+// 	P::Public: AppPublic + Encode + Decode + Debug,
+// 	P::Signature: Encode + Decode,
+// 	// A: AuthorityId<P>,
+// 	B: BlockT,
+// 	C: ProvideRuntimeApi<B> + BlockchainEvents<B> + BlockOf + Sync + Send + 'static, 
+// 	C::Api: VoteApi<B, AuthorityId<P>>,
+// 	VL: VoteLink<B> + Send + Clone,
+
+// impl<P, B, C, E, I, L, BS, SO, SC, VL, CIDP, Error> slot_worker::SimpleSlotWorker<B>
+// 	for AuthorWorker<P, B, C, E, I, L, BS, SO, VL, CIDP, SC> 
+// where
+// 	P: Pair + Send + Sync,
+// 	P::Public: AppPublic + Encode + Decode + Debug,
+// 	P::Signature: TryFrom<Vec<u8>> + Encode + Decode,
+// 	B: BlockT,
+// 	C: ProvideRuntimeApi<B> + BlockchainEvents<B> + HeaderBackend<B> + BlockOf + Sync + Send + 'static, 
+// 	C::Api: VoteApi<B, AuthorityId<P>>,
+// 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
+// 	E: Environment<B, Error = Error>,
+// 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+// 	L: sc_consensus::JustificationSyncLink<B>,
+// 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+// 	SO: SyncOracle<B> + Send + Sync + Clone,
+// 	SC: SelectChain<B>,
+// 	// PF: Environment<B, Error = Error> + Send + Sync + 'static,
+// 	// PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+// 	VL: VoteLink<B> + Send + Clone,
+// 	CIDP: CreateInherentDataProviders<B, ()> + Send,
+// 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
+// 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
+// {
+// 	type BlockImport = I;
+// 	type SyncOracle = SO;
+// 	type JustificationSyncLink = L;
+// 	type CreateProposer =
+// 		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
+// 	type Proposer = E::Proposer;
+// 	type Claim = (PreDigest, P::Public);
+// 	// type Claim = P::Public;
+// 	type EpochData = Vec<AuthorityId<P>>;
+
+// 	fn logging_target(&self) -> &'static str {
+// 		"aura"
+// 	}
+
+// 	fn block_import(&mut self) -> &mut Self::BlockImport {
+// 		&mut self.block_import
+// 	}
+
+// 	// fn block_notification_stream(&self)->ImportNotifications<B>{
+// 	// 	self.client.import_notification_stream()
+// 	// }
+
+// 	fn epoch_data(
+// 		&self,
+// 		header: &B::Header,
+// 		_slot: Slot,
+// 	) -> Result<Self::EpochData, sp_consensus::Error> {
+// 		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
+// 	}
+
+// 	fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize> {
+// 		Some(epoch_data.len())
+// 	}
+
+// 	// fn claim_slot(
+// 	// 	&mut self,
+// 	// 	_header: &B::Header,
+// 	// 	slot: Slot,
+// 	// 	_epoch_data: &Self::EpochData,
+// 	// ) -> Option<Self::Claim> {
+// 	// 	let sr25519_public_keys = SyncCryptoStore::sr25519_public_keys(
+// 	// 		&*self.keystore, 
+// 	// 		sp_application_crypto::key_types::AURA
+// 	// 	);
+
+// 	// 	if sr25519_public_keys.len() > 0 {
+
+// 	// 		let pub_bytes = sr25519_public_keys[0].to_raw_vec();
+// 	// 		if let Ok(author) = <AuthorityId<P> as Decode>::decode(&mut pub_bytes.as_slice()){
+// 	// 			// let pre_digest = PreDigest{slot: slot, public: author.to_raw_vec()};
+// 	// 			let pre_digest = PreDigest{
+// 	// 				slot,
+// 	// 				rand_bytes: vec![],
+// 	// 				pub_bytes: author.to_raw_vec(),
+// 	// 				election_bytes: vec![],
+// 	// 			};
+// 	// 			return Some((pre_digest, author.clone()));
+// 	// 		}
+// 	// 	}
+
+// 	// 	None
+// 	// }
+
+// 	fn claim_slot(
+// 		&mut self,
+// 		slot: Slot,
+// 		vrf_sig: &VRFSignature,
+// 		election_vec: Vec<ElectionData<B>>,
+// 	) -> Option<Self::Claim> {
+// 		let sr25519_public_keys = SyncCryptoStore::sr25519_public_keys(
+// 			&*self.keystore, 
+// 			sp_application_crypto::key_types::AURA
+// 		);
+
+// 		if sr25519_public_keys.len() == 1{
+
+// 			let pub_bytes = sr25519_public_keys[0].to_raw_vec();
+// 			if let Ok(author) = <AuthorityId<P> as Decode>::decode(&mut pub_bytes.as_slice()){
+// 				let pre_digest = PreDigest{
+// 					slot,
+// 					// rand_bytes: rand_bytes,
+// 					pub_key_bytes: author.to_raw_vec(),
+// 					vrf_output_bytes: vrf_sig.output.to_bytes().encode(),
+// 					vrf_proof_bytes: vrf_sig.proof.to_bytes().encode(),
+// 					election_bytes: election_vec.encode()
+// 				};
+// 				return Some((pre_digest, author.clone()));
+// 				// return Some((pre_digest, author.clone()));
+// 			}
+// 		}
+
+// 		None
+// 	}
+
+// 	// fn is_committee(&mut self, hash: &B::Hash)->bool{
+// 	// 	let committee = match authorities(self.client.as_ref(), &BlockId::Hash(hash.clone())){
+// 	// 		Ok(x)=>x,
+// 	// 		Err(_)=> return false
+// 	// 	};
+
+// 	// 	for author in committee.iter(){
+// 	// 		if SyncCryptoStore::has_keys(
+// 	// 			&*self.keystore,
+// 	// 			&[(author.to_raw_vec(), sp_application_crypto::key_types::AURA)],
+// 	// 		){
+// 	// 			return true;
+// 	// 		}
+// 	// 	}
+// 	// 	return false;
+// 	// }
+
+// 	// add by user
+// 	fn notify_slot(&self, _header: &B::Header, _slot: Slot, _epoch_data: &Self::EpochData) {
+// 	}
+
+// 	fn pre_digest_data(
+// 		&self,
+// 		_slot: Slot,
+// 		claim: &Self::Claim,
+// 	) -> Vec<sp_runtime::DigestItem> {
+// 		// vec![<DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot.clone())]
+// 		vec![<DigestItem as CompatibleDigestItem<P::Signature>>::aura_pre_digest(claim.0.clone())]
+// 	}
+
+// 	fn block_import_params(
+// 		&self,
+// 	) -> Box<
+// 		dyn Fn(
+// 				B::Header,
+// 				&B::Hash,
+// 				Vec<B::Extrinsic>,
+// 				StorageChanges<sp_api::TransactionFor<C, B>, B>,
+// 				Self::Claim,
+// 				Self::EpochData,
+// 			) -> Result<
+// 				sc_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>,
+// 				sp_consensus::Error,
+// 			> + Send
+// 			+ 'static,
+// 	> {
+// 		let keystore = self.keystore.clone();
+// 		Box::new(move |header, header_hash, body, storage_changes, (_, public), _epoch| {
+// 			// sign the pre-sealed hash of the block and then
+// 			// add it to a digest item.
+// 			let public_type_pair = public.to_public_crypto_pair();
+// 			let public = public.to_raw_vec();
+// 			let signature = SyncCryptoStore::sign_with(
+// 				&*keystore,
+// 				<AuthorityId<P> as AppKey>::ID,
+// 				&public_type_pair,
+// 				header_hash.as_ref(),
+// 			)
+// 			.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+// 			.ok_or_else(|| {
+// 				sp_consensus::Error::CannotSign(
+// 					public.clone(),
+// 					"Could not find key in keystore.".into(),
+// 				)
+// 			})?;
+// 			let signature = signature
+// 				.clone()
+// 				.try_into()
+// 				.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
+
+// 			let signature_digest_item =
+// 				<DigestItem as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
+
+// 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
+// 			import_block.post_digests.push(signature_digest_item);
+// 			import_block.body = Some(body);
+// 			import_block.state_action =
+// 				StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
+// 			import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+
+// 			Ok(import_block)
+// 		})
+// 	}
+
+// 	fn force_authoring(&self) -> bool {
+// 		self.force_authoring
+// 	}
+
+// 	fn should_backoff(&self, slot: Slot, chain_head: &B::Header) -> bool {
+// 		if let Some(ref strategy) = self.backoff_authoring_blocks {
+// 			if let Ok(pre_digest) = find_pre_digest::<B, P::Signature>(chain_head) {
+// 				let chain_head_slot = pre_digest.slot;
+// 				return strategy.should_backoff(
+// 					*chain_head.number(),
+// 					chain_head_slot,
+// 					self.client.info().finalized_number,
+// 					slot,
+// 					self.logging_target(),
+// 				)
+// 			}
+// 		}
+// 		false
+// 	}
+
+// 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {
+// 		&mut self.sync_oracle
+// 	}
+
+// 	// fn vote_link(&mut self) -> &mut Self::VoteLink{
+// 	// 	&mut self.vote_link
+// 	// }
+
+// 	fn justification_sync_link(&mut self) -> &mut Self::JustificationSyncLink {
+// 		&mut self.justification_sync_link
+// 	}
+
+// 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
+// 		Box::pin(
+// 			self.env
+// 				.init(block)
+// 				.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)).into()),
+// 		)
+// 	}
+
+// 	fn telemetry(&self) -> Option<TelemetryHandle> {
+// 		self.telemetry.clone()
+// 	}
+
+// 	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> std::time::Duration {
+// 		let parent_slot = find_pre_digest::<B, P::Signature>(&slot_info.chain_head).ok().map(|d| d.slot);
+
+// 		slot_worker::proposing_remaining_duration(
+// 			parent_slot,
+// 			slot_info,
+// 			&self.block_proposal_slot_portion,
+// 			self.max_block_proposal_slot_portion.as_ref(),
+// 			slot_worker::SlotLenienceType::Exponential,
+// 			self.logging_target(),
+// 		)
+// 	}
+// }
 
 // pub async fn run_author_worker<B, C, P, SC, SO, VL>(
 // 	client: Arc<C>,
@@ -664,9 +926,15 @@ where
 // 	SO: SyncOracle<B> + Send,
 // 	VL: VoteLink<B> + Send + Clone,
 
+// fn reset_state_info()
+// fn propagate_vote_and_get_vrf()
+// fn get_min_max_weight()
+// fn recv_election_and_update_weight()
+// fn proposal_block()
+
 pub async fn run_author_worker<P, B, C, I, L, BS, SO, SC, PF, VL, CIDP, Error>(
 	client: Arc<C>,
-	mut worker: AuthorWorker<P, B, C, PF, I, L, BS, SO, VL, CIDP, SC>,
+	mut worker: AuthorWorker<P, B, C, PF, I, L, BS, SO, VL, CIDP>,
 	select_chain: SC,
 	mut sync_oracle: SO,
 	mut vote_link: VL,
@@ -698,13 +966,14 @@ where
         WaitProposal(H)
     }
 
+	// build connection with network
 	let (election_tx, mut election_rx) = mpsc::unbounded();
 	vote_link.ve_request(VoteElectionRequest::BuildElectionStream(election_tx));
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
-	// let mut imported_blocks_stream = worker.import_notification_stream().fuse();
-
     let mut state = AuthorState::WaitStart;
+
+	// fsm
     'outer: loop{
         match state{
             AuthorState::WaitStart=>{
@@ -759,7 +1028,7 @@ where
 					continue 'outer;
 				}
 
-				let (_, vrf_sig) = match worker.propagate_vote_and_get_vrf(&cur_header){
+				let (_, vrf_sig) = match worker.generate_vrf_and_propagate(&cur_header){
 					Ok(x)=>x,
 					Err(e)=>{
 						log::warn!("Author.S1: propagate vote err: {}", e);

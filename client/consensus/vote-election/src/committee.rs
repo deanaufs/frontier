@@ -25,7 +25,7 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 use sp_core::crypto::{Pair, Public};
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::{AppKey, AppPublic, ByteArray};
+use sp_application_crypto::{AppKey, AppPublic};
 use sp_runtime::{
     generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, Zero},

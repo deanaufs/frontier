@@ -29,38 +29,37 @@ pub use crate::{
 	// aux_schema::{MAX_SLOT_CAPACITY, PRUNING_BOUND},
 	slots::{SlotInfo}
 };
-use crate::{slots::Slots};
-// use crate::{slots::Slots, MAX_VOTE_RANK, COMMITTEE_TIMEOUT};
+use crate::{slots::Slots, MAX_VOTE_RANK, COMMITTEE_TIMEOUT};
 
 use codec::{Decode, Encode};
 
 // use rand::Rng;
-use futures::{Future, TryFutureExt};
-// use futures::{Future, TryFutureExt, channel::mpsc, FutureExt};
-// use futures::StreamExt;
+use futures::{Future, TryFutureExt, channel::{mpsc}, FutureExt, future::Either};
+use futures::StreamExt;
 
-// use futures_timer::Delay;
+use futures_timer::Delay;
 use log::{debug, error, info, warn};
 use sc_consensus::{BlockImport, JustificationSyncLink};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
-// use sp_api::{ProvideRuntimeApi};
+use sp_api::{ProvideRuntimeApi};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle, ElectionData};
+use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle,
+	VoteElectionRequest, VoteData, ElectionData};
 // pub use sp_consensus_vote_election::{ AuraApi};
 use sp_consensus_slots::Slot;
 use sp_inherents::{CreateInherentDataProviders};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT, Zero},
+	traits::{Block as BlockT, HashFor, Header as HeaderT, Zero, NumberFor},
 };
 // use sp_blockchain::ProvideCache;
 use sp_timestamp::Timestamp;
-use std::{fmt::Debug, ops::Deref, time::{Duration, }, sync::Arc};
-// use std::collections::{BTreeMap, HashMap, btree_map::Entry};
+use std::{fmt::Debug, ops::Deref, time::{Duration, SystemTime }, sync::Arc};
+use std::collections::{BTreeMap, HashMap};
 use sp_keystore::vrf::VRFSignature;
 
 use sc_client_api::{
-	BlockchainEvents,
+	BlockchainEvents, ImportNotifications, BlockOf, FinalityNotification,
 	// backend::{Backend as ClientBackend, Finalizer},
 };
 
@@ -68,7 +67,7 @@ use sc_client_api::{
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
 pub type StorageChanges<Transaction, Block> =
-	sp_state_machine::StorageChanges<Transaction, HashFor<Block>>;
+	sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>;
 
 /// The result of [`SlotWorker::on_slot`].
 #[derive(Debug, Clone)]
@@ -105,9 +104,6 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// A handle to a `SyncOracle`.
 	type SyncOracle: SyncOracle<B>;
 
-	/// no doce
-	// type VoteLink: VoteLink<B>;
-
 	/// A handle to a `JustificationSyncLink`, allows hooking into the sync module to control the
 	/// justification sync process.
 	type JustificationSyncLink: JustificationSyncLink<B>;
@@ -138,8 +134,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	// fn block_chain_events(&self)->Self::BlockchainEvents;
 
-	// /// A handle
-	// fn block_notification_stream(&self)->ImportNotifications<B>;
+	/// A handle
+	fn block_notification_stream(&self)->ImportNotifications<B>;
 
 	/// Returns the epoch data necessary for authoring. For time-dependent epochs,
 	/// use the provided slot number as a canonical source of time.
@@ -173,7 +169,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		&self,
 		slot: Slot,
 		claim: &Self::Claim,
-	) -> Vec<sp_runtime::DigestItem>;
+	) -> Vec<sp_runtime::DigestItem<B::Hash>>;
 
 	/// Returns a function which produces a `BlockImportParams`.
 	fn block_import_params(
@@ -212,9 +208,6 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Returns a handle to a `SyncOracle`.
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle;
 
-	// /// Returns a handle to a `VoteLink`.
-	// fn vote_link(&mut self) -> &mut Self::VoteLink;
-
 	/// Returns a handle to a `JustificationSyncLink`.
 	fn justification_sync_link(&mut self) -> &mut Self::JustificationSyncLink;
 
@@ -227,13 +220,223 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Remaining duration for proposing.
 	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration;
 
-	/// no doc
-	fn claim_slot(
-		&mut self,
-		slot: Slot,
-		vrf_sig: &VRFSignature,
-		election_vec: Vec<ElectionData<B>>
-	)->Option<Self::Claim>;
+	/// Implements [`SlotWorker::on_slot`].
+	// async fn on_slot(
+	// 	&mut self,
+	// 	slot_info: SlotInfo<B>,
+	// 	// client: Arc<dyn BlockchainEvents<B> + Sync + Send + 'static>,
+	// ) -> Option<SlotResult<B, <Self::Proposer as Proposer<B>>::Proof>> {
+	// 	let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
+
+	// 	let telemetry = self.telemetry();
+	// 	let logging_target = self.logging_target();
+
+	// 	let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
+
+	// 	let proposing_remaining = if proposing_remaining_duration == Duration::default() {
+	// 		debug!(
+	// 			target: logging_target,
+	// 			"Skipping proposal slot {} since there's no time left to propose", slot,
+	// 		);
+
+	// 		return None
+	// 	} else {
+	// 		Delay::new(proposing_remaining_duration)
+	// 	};
+
+	// 	let epoch_data = match self.epoch_data(&slot_info.chain_head, slot) {
+	// 		Ok(epoch_data) => epoch_data,
+	// 		Err(err) => {
+	// 			warn!(
+	// 				target: logging_target,
+	// 				"Unable to fetch epoch data at block {:?}: {:?}",
+	// 				slot_info.chain_head.hash(),
+	// 				err,
+	// 			);
+
+	// 			telemetry!(
+	// 				telemetry;
+	// 				CONSENSUS_WARN;
+	// 				"slots.unable_fetching_authorities";
+	// 				"slot" => ?slot_info.chain_head.hash(),
+	// 				"err" => ?err,
+	// 			);
+
+	// 			return None
+	// 		},
+	// 	};
+
+	// 	self.notify_slot(&slot_info.chain_head, slot, &epoch_data);
+
+	// 	let authorities_len = self.authorities_len(&epoch_data);
+
+	// 	if !self.force_authoring() &&
+	// 		self.sync_oracle().is_offline() &&
+	// 		authorities_len.map(|a| a > 1).unwrap_or(false)
+	// 	{
+	// 		debug!(target: logging_target, "Skipping proposal slot. Waiting for the network.");
+	// 		telemetry!(
+	// 			telemetry;
+	// 			CONSENSUS_DEBUG;
+	// 			"slots.skipping_proposal_slot";
+	// 			"authorities_len" => authorities_len,
+	// 		);
+
+	// 		return None
+	// 	}
+
+	// 	let claim = self.claim_slot(&slot_info.chain_head, slot, &epoch_data)?;
+
+	// 	if self.should_backoff(slot, &slot_info.chain_head) {
+	// 		return None
+	// 	}
+
+	// 	debug!(
+	// 		target: self.logging_target(),
+	// 		"Starting authorship at slot {}; timestamp = {}",
+	// 		slot,
+	// 		*timestamp,
+	// 	);
+
+	// 	telemetry!(
+	// 		telemetry;
+	// 		CONSENSUS_DEBUG;
+	// 		"slots.starting_authorship";
+	// 		"slot_num" => *slot,
+	// 		"timestamp" => *timestamp,
+	// 	);
+
+	// 	let proposer = match self.proposer(&slot_info.chain_head).await {
+	// 		Ok(p) => p,
+	// 		Err(err) => {
+	// 			warn!(
+	// 				target: logging_target,
+	// 				"Unable to author block in slot {:?}: {:?}", slot, err,
+	// 			);
+
+	// 			telemetry!(
+	// 				telemetry;
+	// 				CONSENSUS_WARN;
+	// 				"slots.unable_authoring_block";
+	// 				"slot" => *slot,
+	// 				"err" => ?err
+	// 			);
+
+	// 			return None
+	// 		},
+	// 	};
+
+	// 	let logs = self.pre_digest_data(slot, &claim);
+
+	// 	// deadline our production to 98% of the total time left for proposing. As we deadline
+	// 	// the proposing below to the same total time left, the 2% margin should be enough for
+	// 	// the result to be returned.
+	// 	let proposing = proposer
+	// 		.propose(
+	// 			slot_info.inherent_data,
+	// 			sp_runtime::generic::Digest { logs },
+	// 			proposing_remaining_duration.mul_f32(0.98),
+	// 			None,
+	// 		)
+	// 		.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
+
+	// 	let proposal = match futures::future::select(proposing, proposing_remaining).await {
+	// 		Either::Left((Ok(p), _)) => p,
+	// 		Either::Left((Err(err), _)) => {
+	// 			warn!(target: logging_target, "Proposing failed: {:?}", err);
+
+	// 			return None
+	// 		},
+	// 		Either::Right(_) => {
+	// 			info!(
+	// 				target: logging_target,
+	// 				"⌛️ Discarding proposal for slot {}; block production took too long", slot,
+	// 			);
+	// 			// If the node was compiled with debug, tell the user to use release optimizations.
+	// 			#[cfg(build_type = "debug")]
+	// 			info!(
+	// 				target: logging_target,
+	// 				"👉 Recompile your node in `--release` mode to mitigate this problem.",
+	// 			);
+	// 			telemetry!(
+	// 				telemetry;
+	// 				CONSENSUS_INFO;
+	// 				"slots.discarding_proposal_took_too_long";
+	// 				"slot" => *slot,
+	// 			);
+
+	// 			return None
+	// 		},
+	// 	};
+
+	// 	let block_import_params_maker = self.block_import_params();
+	// 	let block_import = self.block_import();
+
+	// 	let (block, storage_proof) = (proposal.block, proposal.proof);
+	// 	let (header, body) = block.deconstruct();
+	// 	let header_num = *header.number();
+	// 	let header_hash = header.hash();
+	// 	let parent_hash = *header.parent_hash();
+
+	// 	let block_import_params = match block_import_params_maker(
+	// 		header,
+	// 		&header_hash,
+	// 		body.clone(),
+	// 		proposal.storage_changes,
+	// 		claim,
+	// 		epoch_data,
+	// 	) {
+	// 		Ok(bi) => bi,
+	// 		Err(err) => {
+	// 			warn!(target: logging_target, "Failed to create block import params: {:?}", err);
+
+	// 			return None
+	// 		},
+	// 	};
+
+	// 	info!(
+	// 		target: logging_target,
+	// 		"🔖 Pre-sealed block at {}. Hash now {}, previously {}.",
+	// 		header_num,
+	// 		block_import_params.post_hash(),
+	// 		header_hash,
+	// 	);
+
+	// 	telemetry!(
+	// 		telemetry;
+	// 		CONSENSUS_INFO;
+	// 		"slots.pre_sealed_block";
+	// 		"header_num" => ?header_num,
+	// 		"hash_now" => ?block_import_params.post_hash(),
+	// 		"hash_previously" => ?header_hash,
+	// 	);
+
+	// 	let header = block_import_params.post_header();
+	// 	match block_import.import_block(block_import_params, Default::default()).await {
+	// 		Ok(res) => {
+	// 			res.handle_justification(
+	// 				&header.hash(),
+	// 				*header.number(),
+	// 				self.justification_sync_link(),
+	// 			);
+	// 		},
+	// 		Err(err) => {
+	// 			warn!(
+	// 				target: logging_target,
+	// 				"Error with block built on {:?}: {:?}", parent_hash, err,
+	// 			);
+
+	// 			telemetry!(
+	// 				telemetry;
+	// 				CONSENSUS_WARN;
+	// 				"slots.err_with_block_built_on";
+	// 				"hash" => ?parent_hash,
+	// 				"err" => ?err,
+	// 			);
+	// 		},
+	// 	}
+	// 	Some(SlotResult { block: B::new(header, body), storage_proof })
+	// }
 
 	/// no doc
 	async fn produce_block(
@@ -250,8 +453,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let telemetry = self.telemetry();
 		let logging_target = self.logging_target();
 
-		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
-		// let proposing_remaining_duration = Duration::from_millis();
+		// let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
+		let proposing_remaining_duration = Duration::from_secs(COMMITTEE_TIMEOUT-1);
+		let proposing_remaining = Delay::new(proposing_remaining_duration.clone());
 
 		let epoch_data = match self.epoch_data(&parent_header, slot) {
 			Ok(epoch_data) => epoch_data,
@@ -296,7 +500,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return None
 		}
 
-		let claim = self.claim_slot(slot_info.slot, vrf_sig, election_vec)?;
+		let claim = self.claim_slot_v2(slot_info.slot, vrf_sig, election_vec)?;
 
 		if self.should_backoff(slot, &parent_header) {
 			return None
@@ -342,22 +546,56 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		// deadline our production to 98% of the total time left for proposing. As we deadline
 		// the proposing below to the same total time left, the 2% margin should be enough for
 		// the result to be returned.
+		// log::info!("slot_worker, remaining duration: {}ms", proposing_remaining_duration.as_millis());
 		let proposing = proposer
 			.propose(
 				slot_info.inherent_data,
 				sp_runtime::generic::Digest { logs },
 				proposing_remaining_duration.mul_f32(0.98),
+				// Duration::from_millis(5000),
 				None,
 			)
 			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
 
-		let proposal = match proposing.await{
-			Ok(p) => p,
-			Err(err) => {
-				warn!(target: logging_target, "Proposing failed: {:?}", err);
-				return None;
-			}
+		// let import_delay = Delay::new(proposing_remaining_duration.mul_f32(0.98));
+		// let start_time = SystemTime::now();
+		let proposal = match futures::future::select(proposing, proposing_remaining).await {
+			Either::Left((Ok(p), _)) => p,
+			Either::Left((Err(err), _)) => {
+				warn!("Proposing failed: {:?}", err);
+
+				return None
+			},
+			Either::Right(_) => {
+				info!(
+					target: logging_target,
+					"⌛️ Discarding proposal for slot {}; block production took too long", slot,
+				);
+				// If the node was compiled with debug, tell the user to use release optimizations.
+				#[cfg(build_type = "debug")]
+				info!(
+					"👉 Recompile your node in `--release` mode to mitigate this problem.",
+				);
+				// telemetry!(
+				// 	telemetry;
+				// 	CONSENSUS_INFO;
+				// 	"slots.discarding_proposal_took_too_long";
+				// 	"slot" => *slot,
+				// );
+
+				return None
+			},
 		};
+		// let _ = start_time.elapsed().map(|d|log::info!("proposing time: {}ms", d.as_millis()));
+		// import_delay.await;
+
+		// let proposal = match proposing.await{
+		// 	Ok(p) => p,
+		// 	Err(err) => {
+		// 		warn!(target: logging_target, "Proposing failed: {:?}", err);
+		// 		return None;
+		// 	}
+		// };
 
 		let (block, storage_proof) = (proposal.block, proposal.proof);
 		let (header, body) = block.deconstruct();
@@ -428,30 +666,37 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		Some(SlotResult { block: B::new(header, body), storage_proof })
 	}
 
-	// /// no doc
-	// fn propagate_vote(&mut self, vrf_sig: &VRFSignature, hash: &B::Hash);
-	// /// no doc
-	// fn propagate_election(&mut self, hash: B::Hash, _: Vec<VoteData<B>>);
-	// /// no doc
-	// fn verify_vote(&mut self, vote_data: &VoteData<B>)->Result<u128, String>;
-	// /// no doc
-	// fn verify_election(&mut self, election_data: &ElectionData<B>, hash: &B::Hash)->bool;
-	// /// no doc
-	// fn is_committee(&mut self, hash: &B::Hash)->bool;
-	// /// no doc
-	// // fn caculate_min_weight(&mut self, header: &B::Header)->Result<u64, &str>;
-	// /// no doc
-	// fn caculate_elections_weight(
-	// 	&mut self,
-	// 	header: &B::Header,
-	// 	election_vec: &Vec<ElectionData<B>>
-	// )->Result<u64, String>;
-	// /// no doce
-	// fn caculate_weight_info_from_header(&mut self, header: &B::Header)->Result<ElectionWeightInfo, String>;
-	// /// no doce
-	// fn caculate_min_max_weight(&mut self, header: &B::Header)->Result<(u64, u64), String>;
-	// /// no doce
-	// fn generate_author_vrf_data(&mut self, cur_hash: &B::Hash)->Result<(u128, VRFSignature), String>;
+	/// no doc
+	fn propagate_vote(&mut self, vrf_sig: &VRFSignature, hash: &B::Hash);
+	/// no doc
+	fn propagate_election(&mut self, hash: B::Hash, _: Vec<VoteData<B>>);
+	/// no doc
+	fn verify_vote(&mut self, vote_data: &VoteData<B>)->Result<u128, String>;
+	/// no doc
+	fn verify_election(&mut self, election_data: &ElectionData<B>, hash: &B::Hash)->bool;
+	/// no doc
+	fn is_committee(&mut self, hash: &B::Hash)->bool;
+	/// no doc
+	fn claim_slot_v2(
+		&mut self,
+		slot: Slot,
+		vrf_sig: &VRFSignature,
+		election_vec: Vec<ElectionData<B>>
+	)->Option<Self::Claim>;
+	/// no doc
+	// fn caculate_min_weight(&mut self, header: &B::Header)->Result<u64, &str>;
+	/// no doc
+	fn caculate_elections_weight(
+		&mut self,
+		header: &B::Header,
+		election_vec: &Vec<ElectionData<B>>
+	)->Result<u64, String>;
+	/// no doce
+	fn caculate_weight_info_from_header(&mut self, header: &B::Header)->Result<ElectionWeightInfo, String>;
+	/// no doce
+	fn caculate_min_max_weight(&mut self, header: &B::Header)->Result<(u64, u64), String>;
+	/// no doce
+	fn generate_author_vrf_data(&mut self, cur_hash: &B::Hash)->Result<(u128, VRFSignature), String>;
 }
 
 // #[async_trait::async_trait]
@@ -510,80 +755,747 @@ impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H);
 impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I);
 impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I, J);
 
-// enum AuthorState<B: BlockT>{
-// 	WaitStart,
-// 	WaitProposal(B::Header),
-// }
+enum AuthorState<B: BlockT>{
+	WaitStart,
+	WaitProposal(B::Header),
+}
 
-// pub struct ElectionWeightInfo{
-// 	pub weight: u64,
-// 	pub random: u128,
-// 	// pub header: B::Header,
-// }
+pub struct ElectionWeightInfo{
+	pub weight: u64,
+	pub random: u128,
+	// pub header: B::Header,
+}
 
-// /// Start a new slot worker.
-// ///
-// /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
-// /// polled until completion, unless we are major syncing.
-// pub async fn start_slot_worker<B, C, S, W, T, SO, CIDP, CAW>(
-// 	slot_duration: SlotDuration<T>,
-// 	_client: Arc<C>,
-// 	select_chain: S,
-// 	mut _worker: W,
-// 	mut sync_oracle: SO,
-// 	create_inherent_data_providers: CIDP,
-// 	can_author_with: CAW,
-// ) where
-// 	B: BlockT,
-// 	C: BlockchainEvents<B> + Sync + Send + 'static, 
-// 	S: SelectChain<B>,
-// 	// W: SlotWorker<B, Proof>,
-// 	W: SimpleSlotWorker<B> + Send,
-// 	SO: SyncOracle<B> + Send,
-// 	T: SlotData + Clone,
-// 	CIDP: CreateInherentDataProviders<B, ()> + Send,
-// 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
-// 	CAW: CanAuthorWith<B> + Send,
-// {
-// 	let SlotDuration(slot_duration) = slot_duration;
+/// aura author worker
+pub async fn ve_author_worker<B, C, S, W, T, SO, CIDP, CAW>(
+	slot_duration: SlotDuration<T>,
+	client: Arc<C>,
+	select_chain: S,
+	mut worker: W,
+	mut sync_oracle: SO,
+	create_inherent_data_providers: CIDP,
+	_can_author_with: CAW,
+) where
+	B: BlockT,
+	C: BlockchainEvents<B> + ProvideRuntimeApi<B> + BlockOf + Sync + Send + 'static, 
+	// C::Api: AuraApi<B, AuthorityId<P>>,
+	S: SelectChain<B>,
+	W: SimpleSlotWorker<B> + Send,
+	SO: SyncOracle<B> + Send,
+	T: SlotData + Clone,
+	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
+	CAW: CanAuthorWith<B> + Send,
+{
+	let (election_tx, mut election_rx) = mpsc::unbounded();
+	sync_oracle.ve_request(VoteElectionRequest::BuildElectionStream(election_tx));
+	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 
-// 	let mut slots =
-// 		Slots::new(slot_duration.slot_duration(), create_inherent_data_providers, select_chain);
+	let mut slots =
+		Slots::new(slot_duration.slot_duration(), create_inherent_data_providers, select_chain.clone());
+
+	let mut state = <AuthorState<B>>::WaitStart;
+	loop{
+		match state {
+			AuthorState::WaitStart=>{
+				log::info!("► AuthorState::S0, wait block or timeout");
+				let full_timeout_duration = Duration::from_secs(COMMITTEE_TIMEOUT+2);
+				let start_time = SystemTime::now();
+				loop{
+					let elapsed_duration = start_time.elapsed().unwrap_or(full_timeout_duration);
+					let rest_delay_duration = full_timeout_duration.checked_sub(elapsed_duration).unwrap_or(Duration::from_secs(0));
+					let timeout = Delay::new(rest_delay_duration);
+
+					futures::select!{
+						block = imported_blocks_stream.next()=>{
+							if let Some(block) = block{
+								log::info!("Author.S0, import block: #{} ({})", block.header.number(), block.hash);
+								if sync_oracle.is_major_syncing(){
+									state = AuthorState::WaitStart;
+									break;
+								}
+								else{
+									state = AuthorState::WaitProposal(block.header);
+									break;
+								}
+							}
+						},
+						_ = election_rx.select_next_some()=>{
+							// log::info!("Author: recv election");
+							continue;
+						},
+						_ = timeout.fuse() =>{
+							let chain_head = match select_chain.best_chain().await{
+								Ok(x)=>x,
+								Err(e)=>{
+									log::warn!("Author.S0: select_chain err: {}", e);
+									state = AuthorState::WaitStart;
+									break;
+								}
+							};
+							state = AuthorState::WaitProposal(chain_head);
+							break;
+						}
+					}
+				}
+			},
+			AuthorState::WaitProposal(cur_header)=>{
+				log::info!(
+					"► AuthorState::S1 #{} ({}), propagate vote and wait proposal",
+					cur_header.number(),
+					cur_header.hash(),
+				);
+
+				let (local_vrf_num, vrf_signature) = match worker.generate_author_vrf_data(&cur_header.hash()){
+					Ok(x)=>{
+						log::info!(
+							"Author.S1, gen vrf u128: 0x{:0>32X}, #{} ({})",
+							x.0, cur_header.number(), cur_header.hash(),
+						);
+						x
+					},
+					Err(e)=>{
+						log::warn!("Author.S1, generate vrf failed: {}", e);
+						state = AuthorState::WaitStart;
+						continue;
+					},
+				};
+				worker.propagate_vote(&vrf_signature, &cur_header.hash());
+
+				// let (tx, rx) = mpsc::oneshot();
+				// worker.pre_proposal(&cur_header, rx);
+				// let _ = worker.produce_block(slot_info, &cur_header, &vrf_signature, election_vec).await;
+
+				let mut election_vec = vec![];
+				let mut min_delay_count = 0;
+				let mut not_min_delay_count = 0;
+
+				let full_timeout_duration = Duration::from_secs(COMMITTEE_TIMEOUT*3);
+				let start_time = SystemTime::now();
+				let mut rest_timeout_rate = 1f32;
+
+				let (min_election_weight, max_election_weight) = match worker.caculate_min_max_weight(&cur_header){
+					Ok(v) => v,
+					Err(e) => {
+						// state = AuthorState::WaitProposal(cur_header);
+						log::info!("Author.S1, cal weight err {:?}", e);
+						state = AuthorState::WaitStart;
+						continue;
+					}
+				};
+
+				let cur_block_weight = {
+					if cur_header.number().is_zero(){
+						0u64
+					}
+					else{
+						let weight = match worker.caculate_weight_info_from_header(&cur_header){
+							Ok(v)=>v.weight,
+							Err(e) => {
+								log::warn!(
+									"Author.S1, cacl block election weight error, {:?}, #{} ({})",
+									e, cur_header.number(), cur_header.hash(),
+								);
+								state = AuthorState::WaitStart;
+								continue;
+							},
+						};
+						weight
+					}
+				};
+
+				let mut cur_election_weight = max_election_weight;
+
+				loop{
+					let elapsed_duration = start_time.elapsed().unwrap_or(full_timeout_duration);
+					let mut rest_timeout_duration = full_timeout_duration.checked_sub(elapsed_duration).unwrap_or(Duration::from_secs(0));
+					if rest_timeout_rate < 1f32{
+						let last_rest_millis = rest_timeout_duration.as_millis();
+						let rest_millis = ((last_rest_millis as f32) * rest_timeout_rate) as u64;
+						rest_timeout_duration = Duration::from_millis(rest_millis);
+					}
+					
+					let timeout = Delay::new(rest_timeout_duration);
+					if election_vec.len()==5{
+						log::info!("Author.S1, timeout: {:?}, rest_rate: {}", rest_timeout_duration, rest_timeout_rate);
+					}
+
+					futures::select!{
+						block = imported_blocks_stream.next()=>{
+							if let Some(block) = block{
+								log::info!("Author.S1, import block: #{} ({})", block.header.number(), block.hash);
+								if sync_oracle.is_major_syncing(){
+									state = AuthorState::WaitStart;
+									break;
+								}
+
+								let import_block_election_info = match worker.caculate_weight_info_from_header(&block.header){
+									Ok(v)=>v,
+									Err(e) => {
+										log::info!("Author.S1, caculate block election weight error, {:?}, #{} ({})",
+											e, block.header.number(), block.header.hash()
+										);
+										continue
+									},
+								};
+
+								// log::info!("Author.S1, block random: 0x{:0>32X} ({})", new_block_election_info.random, block.header.hash());
+
+								if import_block_election_info.weight <= min_election_weight {	// exceed 51%
+									log::info!(
+										"Author.S1, import block #{} ({}) from outside with exceed 50% election", 
+										block.header.number(),
+										block.hash
+									);
+
+									if *block.header.parent_hash() != cur_header.hash(){
+										log::warn!(
+											"Author.S1, AS1#01 need handle: #{}({}) is not the next block for current block #{}({})",
+											block.header.number(),
+											block.header.hash(),
+											cur_header.number(),
+											cur_header.hash(),
+										);
+									}
+									state = AuthorState::WaitProposal(block.header);
+									break;
+								}
+
+								// import block for next height
+								if block.header.parent_hash() == &cur_header.hash(){
+									if import_block_election_info.random < local_vrf_num {
+										log::info!(
+											"Author.S1, block #{}({}) outside with smaller random",
+											block.header.number(),
+											block.hash,
+										);
+										state = AuthorState::WaitProposal(block.header);
+										break;
+									}
+									else{
+										log::info!(
+											"Author.S1, ignore block because local vrf smaller, local: 0x{:0>32X} < 0x{:0>32X}",
+											local_vrf_num,
+											import_block_election_info.random,
+										);
+									}
+								}
+								// import block with same height
+								else if block.header.parent_hash() == cur_header.parent_hash(){
+								// else if block.header.hash() == cur_header.hash(){
+									if import_block_election_info.weight < cur_block_weight{
+										log::info!("Author.S1: change to a block with less weight, #{}({})",
+											block.header.number(), block.hash) ;
+										state = AuthorState::WaitProposal(block.header);
+										break;
+									}
+									else{
+										log::info!(
+											"Author.S1: ignore block with larger weight, #{}({}), cur: {}, new: {}",
+											block.header.number(),
+											block.hash,
+											cur_block_weight,
+											import_block_election_info.weight,
+										);
+									}
+								}
+								else{
+									log::warn!(
+										"Author.S1, AS1#02 need handle: cur: #{}({}), new: #{}({})",
+										cur_header.number(),
+										cur_header.hash(),
+										block.header.number(),
+										block.header.hash(),
+									);
+								}
+
+								log::info!(
+									"Author.S1: ignore the block: #{} ({})",
+									block.header.number(),
+									block.hash
+								);
+							}
+						},
+						election = election_rx.select_next_some()=>{
+							if election.block_hash != cur_header.hash(){
+								log::info!(
+									"Author.S1, election mismatch: cur: #{} ({}), recv: {}",
+									cur_header.number(),
+									cur_header.hash(),
+									election.block_hash,
+								);
+								continue;
+							}
+
+							if !worker.verify_election(&election, &cur_header.hash()){
+								log::info!("Author.S1, election verify failed");
+								continue;
+							}
+
+							election_vec.push(election);
+							cur_election_weight = match worker.caculate_elections_weight(&cur_header, &election_vec){
+								Ok(x) => x,
+								Err(_)  => max_election_weight,
+							};
+
+							rest_timeout_rate = {
+								if cur_election_weight <= min_election_weight{
+									if min_delay_count < 10 { 
+										min_delay_count += 1;
+										0.015f32
+									}
+									else {
+										0.0
+									}
+								}
+								else{
+									let rate = (cur_election_weight - min_election_weight) as f32 /
+										(max_election_weight - min_election_weight) as f32;
+									
+									if not_min_delay_count < 10{
+										not_min_delay_count += 1;
+										rate + 0.66f32
+									}
+									else{
+										rate
+									}
+
+									// 0.02f32.max(
+									// 	(cur_election_weight - min_election_weight) as f32 /
+									// 	(max_election_weight - min_election_weight) as f32
+									// )
+								}
+							};
+
+							// if election_vec.len() == 3{
+							// 	log::info!(
+							// 		"Author.S1, cur:{}, min:{}, max:{}, rate: {}",
+							// 		cur_election_weight,
+							// 		min_election_weight,
+							// 		max_election_weight,
+							// 		rest_timeout_rate,
+							// 	);
+							// }
+							// continue;
+						},
+						_ = timeout.fuse()=>{
+							// log::info!("Author.S1, timeout");
+
+							if cur_election_weight < max_election_weight {
+								log::info!(
+									"Author.S1: timeout, prepare block at: #{} ({})",
+									cur_header.number(),
+									cur_header.hash(),
+								);
+								if let Ok(slot_info) = slots.default_slot().await{
+									// let _ = worker.produce_block(slot_info, &cur_header, rand_bytes, election_vec).await;
+									let _ = worker.produce_block(slot_info, &cur_header, &vrf_signature, election_vec).await;
+								}
+							}
+							else{
+								log::info!(
+									"Author.S1: timeout, no weight prepare block at: #{} ({})",
+									cur_header.number(),
+									cur_header.hash(),
+								);
+							}
+
+							state = AuthorState::WaitStart;
+							break;
+						},
+					}
+				}
+			}
+		}
+	}
+}
+
+enum CommitteeState<B: BlockT>{
+	WaitStart,
+	RecvVote(B::Header),
+}
+
+/// aura committee worker
+pub async fn ve_committee_worker<B, C, S, W, T, SO, CIDP, CAW>(
+	_slot_duration: SlotDuration<T>,
+	client: Arc<C>,
+	select_chain: S,
+	mut worker: W,
+	mut sync_oracle: SO,
+	_create_inherent_data_providers: CIDP,
+	_can_author_with: CAW,
+) where
+	B: BlockT,
+	C: BlockchainEvents<B> + Sync + Send + 'static, 
+	S: SelectChain<B>,
+	W: SimpleSlotWorker<B> + Send,
+	SO: SyncOracle<B> + Send,
+	T: SlotData + Clone,
+	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
+	CAW: CanAuthorWith<B> + Send,
+{
+	let (vote_tx, mut vote_rx) = mpsc::unbounded();
+	sync_oracle.ve_request(VoteElectionRequest::BuildVoteStream(vote_tx));
+
+	let mut imported_blocks_stream = client.import_notification_stream().fuse();
+	let mut finality_notification_stream = client.finality_notification_stream().fuse();
+
+	let mut root_vote_map = HashMap::<B::Hash, BTreeMap<u128, VoteData<B>>>::new();
+
+	let chain_head = match select_chain.best_chain().await{
+		Ok(x) => x,
+		Err(e) => {
+			log::info!("fetch chain head err: {:?}", e);
+			return
+		}
+	};
+
+	let mut is_init_state = false;
+	let mut genesis_header = None;
+	if chain_head.number().is_zero() {
+		is_init_state = true;
+		genesis_header = Some(chain_head);
+	}
+
+	fn on_recv_vote<B: BlockT>(
+		root_vote_map: &mut HashMap::<B::Hash, BTreeMap::<u128, VoteData<B>>>,
+		vrf_num: u128,
+		vote_data: &VoteData<B>,
+	){
+		if let Some(bt_map) = root_vote_map.get_mut(&vote_data.block_hash){
+			bt_map.insert(vrf_num, vote_data.clone());
+			if bt_map.len() <= MAX_VOTE_RANK {
+				return
+			}
+
+			let mut keys = bt_map.keys().cloned().collect::<Vec<_>>();
+			while bt_map.len() > MAX_VOTE_RANK{
+				keys.pop().as_ref().map(|x|{
+					// log::info!("remove: {}", x);
+					bt_map.remove(x)
+				});
+			}
+			// log::info!("bt map size: {}", bt_map.len());
+		}
+		else{
+			let mut new_bt_map = BTreeMap::new();
+			new_bt_map.insert(vrf_num, vote_data.clone());
+			root_vote_map.insert(vote_data.block_hash, new_bt_map);
+			// log::info!("bt map size: 1");
+		}
+
+		// match root_vote_map.entry(&vote_data.hash){
+		// 	Entry::Vacant(entry) =>{
+		// 		let mut new_bt_map = BTreeMap::new();
+		// 		new_bt_map.insert(vrf_num, vote_data.clone());
+		// 		entry.insert(new_bt_map);
+		// 	},
+		// 	Entry::Occupied(mut entry)=>{
+		// 		let bt_map = entry.get_mut();
+		// 		bt_map.insert(vrf_num, vote_data.clone());
+		// 		if bt_map.len() <= MAX_VOTE_RANK{
+		// 			return
+		// 		}
+
+		// 		let mut keys = bt_map.keys().cloned().collect::<Vec<_>>();
+		// 		while bt_map.len() > MAX_VOTE_RANK{
+		// 			keys.pop().as_ref().map(|x|{
+		// 				bt_map.remove(x)
+		// 			});
+		// 		}
+		// 	},
+		// }
+	}
+
+	fn on_finalize_block<B: BlockT>(
+		root_vote_map: &mut HashMap::<B::Hash, BTreeMap::<u128, VoteData<B>>>,
+		block: Option<FinalityNotification<B>>
+	){
+		block.map(|block|root_vote_map.remove(&block.hash));
+	}
+
+	let mut state = <CommitteeState<B>>::WaitStart;
+	'outer: loop{
+		match state{
+			CommitteeState::WaitStart=>{
+				log::info!("► CommitteeState::S0, wait start");
+				let full_timeout_duration = Duration::from_secs(COMMITTEE_TIMEOUT+2);
+				let start_time = SystemTime::now();
+
+				loop{
+					let elapsed_duration = start_time.elapsed().unwrap_or(full_timeout_duration);
+					let rest_timeout_duration = full_timeout_duration
+						.checked_sub(elapsed_duration).unwrap_or(Duration::from_secs(0));
+					let timeout = Delay::new(rest_timeout_duration);
+
+					futures::select!{
+						block = imported_blocks_stream.next()=>{
+							is_init_state = false;
+							if let Some(block) = block{
+								log::info!("Committee.S0, import block: #{} ({})", block.header.number(), block.hash);
+								if sync_oracle.is_major_syncing(){
+									state = CommitteeState::WaitStart;
+									break;
+								}
+								else{
+									if worker.is_committee(&block.hash){
+										state = CommitteeState::RecvVote(block.header);
+										break;
+									}
+									else{
+										state = CommitteeState::WaitStart;
+										break;
+									}
+								}
+							}
+						},
+						_ = timeout.fuse()=>{
+							if is_init_state == true{
+								if let Some(header) = genesis_header.take(){
+									log::info!("Committee.S0, timeout from init");
+									if worker.is_committee(&header.hash()){
+										state = CommitteeState::RecvVote(header);
+										break;
+									}
+								}
+							}
+						},
+						vote_data = vote_rx.select_next_some()=>{
+							match worker.verify_vote(&vote_data){
+								Ok(vrf_num)=>{
+									// log::info!("Committee.S0, recv vrf u128: {}", vrf_num);
+									on_recv_vote(&mut root_vote_map, vrf_num, &vote_data);
+								},
+								Err(e)=>{
+									log::warn!("Committee.S0, verify vote failed: {}", e);
+								},
+							}
+						},
+						block = finality_notification_stream.next()=>{
+							on_finalize_block(&mut root_vote_map, block);
+							// if let Some(block) = block{
+							// 	// log::info!("--Committee: root_vote_map remove: {}", block.hash);
+							// 	root_vote_map.remove(&block.hash);
+							// }
+							// log::info!("finality : {:?}", notification);
+							// continue;
+							// clear vote 
+						},
+					}
+				}
+			},
+			CommitteeState::RecvVote(cur_header)=>{
+				log::info!(
+					"► CommitteeState::S1 #{} ({}), recv vote and send election, root_map size: {}",
+					cur_header.number(),
+					cur_header.hash(),
+					root_vote_map.len(),
+				);
+
+				let cur_block_weight = {
+					if cur_header.number().is_zero(){
+						0u64
+					}
+					else{
+						let weight = match worker.caculate_weight_info_from_header(&cur_header){
+							Ok(v)=>v.weight,
+							Err(e) => {
+								log::warn!(
+									"Committee.S1, cacl block election weight error, {:?}, #{} ({})",
+									e, cur_header.number(), cur_header.hash(),
+								);
+								state = CommitteeState::WaitStart;
+								continue;
+							},
+						};
+						weight
+					}
+				};
+
+				// let promote_secs = 5;
+				let recv_duration = Duration::from_secs(COMMITTEE_TIMEOUT);
+				let full_timeout_duration = recv_duration;
+				let start_time = SystemTime::now();
+
+				let (min_election_weight, _) = match worker.caculate_min_max_weight(&cur_header){
+					Ok(v) => v,
+					Err(e) => {
+						// state = AuthorState::WaitProposal(cur_header);
+						log::info!("Committee.S1, cacl min max weight error: {:?}", e);
+						state = CommitteeState::WaitStart;
+						continue;
+					}
+				};
+
+				loop{
+					let elapsed_duration = start_time.elapsed().unwrap_or(full_timeout_duration);
+					let rest_timeout_duration = full_timeout_duration
+						.checked_sub(elapsed_duration).unwrap_or(Duration::from_secs(0));
+					let timeout = Delay::new(rest_timeout_duration);
+					futures::select!{
+						block = imported_blocks_stream.next()=>{
+							if let Some(block) = block{
+								log::info!("Committee.S1, import block: #{}({})", block.header.number(), block.hash);
+								if sync_oracle.is_major_syncing(){
+									state = CommitteeState::WaitStart;
+									break;
+								}
+								else{
+									let block_weight_info = match worker.caculate_weight_info_from_header(&block.header){
+										Ok(x)=>x,
+										Err(_)=>{
+											continue;
+										},
+									};
+
+									if !worker.is_committee(&block.hash){
+										continue;
+									}
+
+									if block_weight_info.weight <= min_election_weight {
+										log::info!("Committee.S1: recv block with 50% exceed, #{}({})", block.header.number(), block.hash);
+										state = CommitteeState::RecvVote(block.header);
+										break;
+									}
+
+									// block_state can replaced be by a new_block with higher priority
+									if block.header.parent_hash()==cur_header.parent_hash(){
+
+										if block_weight_info.weight < cur_block_weight{
+											log::info!("Committee.S1: change to a block with less weight, #{}({})",
+												block.header.number(), block.hash);
+											state = CommitteeState::RecvVote(block.header);
+											break;
+										}
+									}
+									log::info!(
+										"Committee.S1: ignore block: #{}({})",
+										block.header.number(),
+										block.header.hash()
+									);
+
+									// else{
+									// 	continue;
+									// }
+								}
+							}
+						},
+						_ = timeout.fuse()=>{
+							if worker.is_committee(&cur_header.hash()){
+								let mut election_result = vec![];
+								let cur_hash = cur_header.hash();
+								if let Some(bt_map) = root_vote_map.get(&cur_hash){
+									for (_, (_k, v)) in bt_map.iter().enumerate(){
+										// log::info!("{}:{:?}", i, v);
+										// log::info!("--Committee send back: ({:?}, {:?}) {}", v.sig_bytes[0..2], v.pub_bytes[0..2], cur_hash);
+										// log::info!("--Committee send: ({:?}), {}", v.pub_bytes, cur_hash);
+										// log::info!("Committee.S1, pre send vrf: 0x{:0>32X}", k);
+										election_result.push(v.clone());
+									}
+
+									// log::info!("--Committee: send back vote: {}", cur_hash);
+									worker.propagate_election(cur_hash, election_result);
+								}
+								else{
+									log::info!("Committee.S1: no vote for hash: #{}({})", cur_header.number(), cur_hash);
+								}
+							}
+							// Delay::new(Duration::from_millis(promote_secs*1000)).await;
+							state = CommitteeState::WaitStart;
+							break;
+						},
+						vote_data = vote_rx.select_next_some()=>{
+							match worker.verify_vote(&vote_data){
+								Ok(vrf_num)=>{
+									// log::info!("Committee.S1, recv vrf u128: {}", vrf_num);
+									on_recv_vote(&mut root_vote_map, vrf_num, &vote_data);
+								},
+								Err(e)=>{
+									log::warn!("Committee.S1, verify vote failed: {}", e);
+								},
+							}
+						},
+						block = finality_notification_stream.next()=>{
+							on_finalize_block(&mut root_vote_map, block);
+							// block.map(|block|root_vote_map.remove(&block.hash));
+							// if let Some(block) = block{
+							// 	// log::info!("--Committee: root_vote_map remove: {}", block.hash);
+							// 	root_vote_map.remove(&block.hash);
+							// }
+							// clear finality block vote 
+							// continue;
+						},
+					}
+				}
+			}
+		}
+	}
+}
+
+/// Start a new slot worker.
+///
+/// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
+/// polled until completion, unless we are major syncing.
+pub async fn start_slot_worker<B, C, S, W, T, SO, CIDP, CAW>(
+	slot_duration: SlotDuration<T>,
+	_client: Arc<C>,
+	select_chain: S,
+	mut _worker: W,
+	mut sync_oracle: SO,
+	create_inherent_data_providers: CIDP,
+	can_author_with: CAW,
+) where
+	B: BlockT,
+	C: BlockchainEvents<B> + Sync + Send + 'static, 
+	S: SelectChain<B>,
+	// W: SlotWorker<B, Proof>,
+	W: SimpleSlotWorker<B> + Send,
+	SO: SyncOracle<B> + Send,
+	T: SlotData + Clone,
+	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
+	CAW: CanAuthorWith<B> + Send,
+{
+	let SlotDuration(slot_duration) = slot_duration;
+
+	let mut slots =
+		Slots::new(slot_duration.slot_duration(), create_inherent_data_providers, select_chain);
 	
-// 	// let mut is_init = false;
+	// let mut is_init = false;
 
-// 	loop {
-// 		let slot_info = match slots.next_slot().await {
-// 			Ok(r) => r,
-// 			Err(e) => {
-// 				warn!(target: "slots", "Error while polling for next slot: {:?}", e);
-// 				return
-// 			},
-// 		};
+	loop {
+		let slot_info = match slots.next_slot().await {
+			Ok(r) => r,
+			Err(e) => {
+				warn!(target: "slots", "Error while polling for next slot: {:?}", e);
+				return
+			},
+		};
 
-// 		if sync_oracle.is_major_syncing() {
-// 			debug!(target: "slots", "Skipping proposal slot due to sync.");
-// 			continue
-// 		}
+		if sync_oracle.is_major_syncing() {
+			debug!(target: "slots", "Skipping proposal slot due to sync.");
+			continue
+		}
 
-// 		if let Err(err) =
-// 			can_author_with.can_author_with(&BlockId::Hash(slot_info.chain_head.hash()))
-// 		{
-// 			warn!(
-// 				target: "slots",
-// 				"Unable to author block in slot {},. `can_author_with` returned: {} \
-// 				Probably a node update is required!",
-// 				slot_info.slot,
-// 				err,
-// 			);
-// 		} else {
-// 			// if is_init==false{
-// 			// 	let _ = worker.on_slot(slot_info).await;
-// 			// 	is_init = true;
-// 			// }
-// 		}
-// 	}
-// }
+		if let Err(err) =
+			can_author_with.can_author_with(&BlockId::Hash(slot_info.chain_head.hash()))
+		{
+			warn!(
+				target: "slots",
+				"Unable to author block in slot {},. `can_author_with` returned: {} \
+				Probably a node update is required!",
+				slot_info.slot,
+				err,
+			);
+		} else {
+			// if is_init==false{
+			// 	let _ = worker.on_slot(slot_info).await;
+			// 	is_init = true;
+			// }
+		}
+	}
+}
 
 /// A header which has been checked
 pub enum CheckedHeader<H, S> {
@@ -624,8 +1536,7 @@ impl<T: SlotData> SlotData for SlotDuration<T> {
 	fn slot_duration(&self) -> std::time::Duration {
 		self.0.slot_duration()
 	}
-
-	// const SLOT_KEY: &'static [u8] = T::SLOT_KEY;
+	const SLOT_KEY: &'static [u8] = T::SLOT_KEY;
 }
 
 impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {

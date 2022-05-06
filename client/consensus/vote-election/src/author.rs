@@ -58,7 +58,7 @@ use sc_telemetry::{TelemetryHandle};
 use slot_worker::{
 	// BackoffAuthoringBlocksStrategy, SlotInfo, StorageChanges,
 	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, StorageChanges,
-	SimpleSlotWorker,
+	// SimpleSlotWorker,
 	// ElectionWeightInfo,
 };
 pub use slot_worker::{SlotProportion, SlotResult};

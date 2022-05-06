@@ -2,6 +2,7 @@ mod import_queue;
 mod utils;
 mod committee;
 mod author;
+mod finalizer;
 mod slot_worker;
 mod slots;
 mod worker;
@@ -59,7 +60,7 @@ pub use sp_consensus_vote_election::{
 use sc_consensus::{BlockImport, };
 use sc_telemetry::{TelemetryHandle, };
 
-use slots::Slots;
+// use slots::Slots;
 use slot_worker::{
 	// BackoffAuthoringBlocksStrategy, SlotInfo, StorageChanges,
 	BackoffAuthoringBlocksStrategy, InherentDataProviderExt,
@@ -71,6 +72,8 @@ pub use import_queue::{
 	build_verifier, import_queue, AuraVerifier, BuildVerifierParams, CheckForEquivocation,
 	ImportQueueParams,
 };
+
+pub use finalizer::run_simple_finalizer;
 
 // use schnorrkel::{
 //     keys::PublicKey,
@@ -114,9 +117,7 @@ where
 	C: ProvideRuntimeApi<B> + BlockchainEvents<B> + BlockOf + Sync + Send + 'static, 
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Encode + Decode + Debug,
-	// P::Public: AppPublic + Hash + Member + Encode + Decode,
 	P::Signature: Encode + Decode,
-	// P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
 	C::Api: VoteApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	SO: SyncOracle<B> + Send,
@@ -201,88 +202,88 @@ where
 	))
 }
 
-pub async fn run_simple_finalizer<A, B, C, CB, P>(client: Arc<C>)
-where
-    A: Codec + Debug,
-    B: BlockT,
-	CB: ClientBackend<B>,
-    C: BlockchainEvents<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + BlockOf + Sync,
-	C::Api: VoteApi<B, A>,
-	P: Pair + Send + Sync,
-	// P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
-	P::Signature: TryFrom<Vec<u8>> + Encode + Decode + Debug,
-{
-	let mut imported_blocks_stream = client.import_notification_stream();
-	let mut pre_finalize_vec = vec![];
+// pub async fn run_simple_finalizer<A, B, C, CB, P>(client: Arc<C>)
+// where
+//     A: Codec + Debug,
+//     B: BlockT,
+// 	CB: ClientBackend<B>,
+//     C: BlockchainEvents<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + BlockOf + Sync,
+// 	C::Api: VoteApi<B, A>,
+// 	P: Pair + Send + Sync,
+// 	// P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
+// 	P::Signature: TryFrom<Vec<u8>> + Encode + Decode + Debug,
+// {
+// 	let mut imported_blocks_stream = client.import_notification_stream();
+// 	let mut pre_finalize_vec = vec![];
 
-    loop{
-        if let Some(block)= imported_blocks_stream.next().await{
+//     loop{
+//         if let Some(block)= imported_blocks_stream.next().await{
 
-			if let Ok(can_finalize) = utils::caculate_block_weight::<A, B, P::Signature, C>(
-				&block.header, client.as_ref(), MAX_VOTE_RANK,
-			){
-				if !can_finalize{
-					continue;
-				}
+// 			if let Ok(can_finalize) = utils::caculate_block_weight::<A, B, P::Signature, C>(
+// 				&block.header, client.as_ref(), MAX_VOTE_RANK,
+// 			){
+// 				if !can_finalize{
+// 					continue;
+// 				}
 
-				pre_finalize_vec.push(block.hash);
-				// log::info!(
-				// 	"⇩ Finalizer: buffer finalize block({}): #{} ({})",
-				// 	pre_finalize_vec.len(),
-				// 	block.header.number(),
-				// 	block.hash
-				// );
-				while pre_finalize_vec.len() > 3{
-					let finalize_hash = pre_finalize_vec.remove(0);
+// 				pre_finalize_vec.push(block.hash);
+// 				// log::info!(
+// 				// 	"⇩ Finalizer: buffer finalize block({}): #{} ({})",
+// 				// 	pre_finalize_vec.len(),
+// 				// 	block.header.number(),
+// 				// 	block.hash
+// 				// );
+// 				while pre_finalize_vec.len() > 3{
+// 					let finalize_hash = pre_finalize_vec.remove(0);
 
-					match client.finalize_block(BlockId::Hash(finalize_hash), None, true){
-						Err(e) => {
-							log::warn!("Failed to finalize block {:?}", e);
-							// rpc::send_result(&mut sender, Err(e.into()))
-						},
-						Ok(()) => {
-							log::info!("✅ Successfully finalized block: {}", block.hash);
-							// rpc::send_result(&mut sender, Ok(()))
-						},
-					}
-				}
+// 					match client.finalize_block(BlockId::Hash(finalize_hash), None, true){
+// 						Err(e) => {
+// 							log::warn!("Failed to finalize block {:?}", e);
+// 							// rpc::send_result(&mut sender, Err(e.into()))
+// 						},
+// 						Ok(()) => {
+// 							log::info!("✅ Successfully finalized block: {}", block.hash);
+// 							// rpc::send_result(&mut sender, Ok(()))
+// 						},
+// 					}
+// 				}
 
-				// min_election_weight: authority_len, MAX_VOTE_RANK
-				// if let Ok(committee_vec) = authorities(client.as_ref(), &BlockId::Hash(block.hash)){
-				//     let min_election_weight = utils::caculate_min_election_weight(committee_vec.len(), MAX_VOTE_RANK);
+// 				// min_election_weight: authority_len, MAX_VOTE_RANK
+// 				// if let Ok(committee_vec) = authorities(client.as_ref(), &BlockId::Hash(block.hash)){
+// 				//     let min_election_weight = utils::caculate_min_election_weight(committee_vec.len(), MAX_VOTE_RANK);
 
-				// 	if let Ok(weight) = utils::caculate_block_weight::<A, B, P::Signature, C>(&block.header, client.as_ref()){
+// 				// 	if let Ok(weight) = utils::caculate_block_weight::<A, B, P::Signature, C>(&block.header, client.as_ref()){
 
-				// 		if weight <= min_election_weight{
-				// 			pre_finalize_vec.push(block.hash);
-				// 			// log::info!(
-				// 			// 	"⇩ Finalizer: buffer finalize block({}): #{} ({})",
-				// 			// 	pre_finalize_vec.len(),
-				// 			// 	block.header.number(),
-				// 			// 	block.hash
-				// 			// );
-				// 			while pre_finalize_vec.len() > 3{
-				// 				let finalize_hash = pre_finalize_vec.remove(0);
+// 				// 		if weight <= min_election_weight{
+// 				// 			pre_finalize_vec.push(block.hash);
+// 				// 			// log::info!(
+// 				// 			// 	"⇩ Finalizer: buffer finalize block({}): #{} ({})",
+// 				// 			// 	pre_finalize_vec.len(),
+// 				// 			// 	block.header.number(),
+// 				// 			// 	block.hash
+// 				// 			// );
+// 				// 			while pre_finalize_vec.len() > 3{
+// 				// 				let finalize_hash = pre_finalize_vec.remove(0);
 
-				// 				match client.finalize_block(BlockId::Hash(finalize_hash), None, true){
-				// 					Err(e) => {
-				// 						log::warn!("Failed to finalize block {:?}", e);
-				// 						// rpc::send_result(&mut sender, Err(e.into()))
-				// 					},
-				// 					Ok(()) => {
-				// 						log::info!("✅ Successfully finalized block: {}", block.hash);
-				// 						// rpc::send_result(&mut sender, Ok(()))
-				// 					},
-				// 				}
-				// 			}
+// 				// 				match client.finalize_block(BlockId::Hash(finalize_hash), None, true){
+// 				// 					Err(e) => {
+// 				// 						log::warn!("Failed to finalize block {:?}", e);
+// 				// 						// rpc::send_result(&mut sender, Err(e.into()))
+// 				// 					},
+// 				// 					Ok(()) => {
+// 				// 						log::info!("✅ Successfully finalized block: {}", block.hash);
+// 				// 						// rpc::send_result(&mut sender, Ok(()))
+// 				// 					},
+// 				// 				}
+// 				// 			}
 
-				// 		}
-				// 	}
-				// }
-			}
-		}
-    }
-}
+// 				// 		}
+// 				// 	}
+// 				// }
+// 			}
+// 		}
+//     }
+// }
 
 pub fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError>
 where

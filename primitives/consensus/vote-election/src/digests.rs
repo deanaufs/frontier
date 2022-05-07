@@ -23,7 +23,7 @@
 
 use crate::AURA_ENGINE_ID;
 use codec::{Codec, Encode, Decode};
-use sp_consensus_slots::Slot;
+// use sp_consensus_slots::Slot;
 use sp_runtime::{DigestItem, RuntimeDebug};
 use sp_std::{vec::Vec, fmt::Debug};
 

@@ -4,11 +4,13 @@ use std::{
 	convert::TryFrom,
     fmt::Debug,
     sync::Arc,
+    hash::Hash,
 };
+use futures::prelude::*;
 
 use sp_runtime::{
     generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT},
+	traits::{Block as BlockT, Header as HeaderT, Member, One},
 };
 
 use sc_client_api::{
@@ -28,7 +30,7 @@ pub use sp_consensus_vote_election::{
 };
 
 use crate::MAX_VOTE_RANK;
-use crate::authorities;
+// use crate::authorities;
 use crate::utils;
 
 pub async fn run_simple_finalizer<A, B, C, CB, P>(client: Arc<C>)
@@ -51,32 +53,29 @@ where
 				continue;
 			}
 
-            // min_election_weight: authority_len, MAX_VOTE_RANK
-            if let Ok(committee_vec) = authorities(client.as_ref(), &BlockId::Hash(block.hash)){
-                let min_election_weight = utils::caculate_min_election_weight(committee_vec.len(), MAX_VOTE_RANK);
+            if let Ok(can_finalize) = utils::caculate_block_weight::<A, B, P::Signature, C>(&block.header, client.as_ref(), MAX_VOTE_RANK){
 
-				if let Ok(weight) = utils::caculate_block_weight::<A, B, P::Signature, C>(&block.header, client.as_ref(), MAX_VOTE_RANK){
+                // if weight <= min_election_weight{
+                if can_finalize{
 
-					if weight <= min_election_weight{
-						pre_finalize_vec.push(block.header.parent_hash().clone());
-						// pre_finalize_vec.push(block.hash);
-						while pre_finalize_vec.len() > 2{
-							let finalize_hash = pre_finalize_vec.remove(0);
+                    pre_finalize_vec.push(block.header.clone());
 
-							match client.finalize_block(BlockId::Hash(finalize_hash.clone()), None, true){
-								Ok(()) => {
-									log::info!("✅ Successfully finalized block: {}", finalize_hash);
-									// rpc::send_result(&mut sender, Ok(()))
-								},
-								Err(e) => {
-									log::warn!("Failed to finalize block {:?}", e);
-									// rpc::send_result(&mut sender, Err(e.into()))
-								},
-							}
-						}
+                    while pre_finalize_vec.len() > 2{
+                        let finalize_header = pre_finalize_vec.remove(0);
 
-					}
-				}
+                        match client.finalize_block(BlockId::Hash(finalize_header.hash()), None, true){
+                            Ok(()) => {
+                                log::info!("✅ Successfully finalized block: #{} ({})", finalize_header.number(), finalize_header.hash());
+                                // rpc::send_result(&mut sender, Ok(()))
+                            },
+                            Err(e) => {
+                                log::warn!("Failed to finalize block #{} ({}) {:?}", finalize_header.number(), finalize_header.hash(), e);
+                                // rpc::send_result(&mut sender, Err(e.into()))
+                            },
+                        }
+                    }
+
+                }
             }
         }
     }

@@ -27,7 +27,8 @@ use sc_consensus::{
 	block_import::{BlockImport, BlockImportParams, ForkChoiceStrategy},
 	import_queue::{BasicQueue, BoxJustificationImport, DefaultImportQueue, Verifier},
 };
-use crate::slot_worker::{CheckedHeader, InherentDataProviderExt};
+// use crate::slot_worker::{CheckedHeader, InherentDataProviderExt};
+use crate::worker::{CheckedHeader, InherentDataProviderExt};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -37,10 +38,11 @@ use sp_blockchain::{
 };
 use sp_consensus::{CanAuthorWith, Error as ConsensusError, ElectionData};
 use sp_consensus_vote_election::{
-	digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi, ConsensusLog,
+	digests::CompatibleDigestItem, AuraApi, ConsensusLog,
+	// digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi, ConsensusLog,
 	AURA_ENGINE_ID, make_transcript,
 };
-use sp_consensus_slots::Slot;
+// use sp_consensus_slots::Slot;
 use sp_core::{crypto::Pair, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
 use sp_runtime::{
@@ -274,7 +276,7 @@ where
 			.await
 			.map_err(|e| Error::<B>::Client(sp_blockchain::Error::Application(e)))?;
 
-		let mut inherent_data = create_inherent_data_providers
+		let inherent_data = create_inherent_data_providers
 			.create_inherent_data()
 			.map_err(Error::<B>::Inherent)?;
 

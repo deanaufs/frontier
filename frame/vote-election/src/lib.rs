@@ -43,10 +43,11 @@ use frame_support::{
 	traits::{DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
 	BoundedSlice, ConsensusEngineId, Parameter, WeakBoundedVec,
 };
-use sp_consensus_vote_election::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID, digests::PreDigest};
+use sp_consensus_vote_election::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID};
+// use sp_consensus_vote_election::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID, digests::PreDigest};
 use sp_runtime::{
 	generic::DigestItem,
-	traits::{IsMember, Member, SaturatedConversion, Saturating, Zero},
+	traits::{IsMember, Member, Saturating},
 	RuntimeAppPublic,
 };
 use sp_std::prelude::*;

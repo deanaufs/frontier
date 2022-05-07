@@ -12,7 +12,7 @@ use frontier_template_runtime::{self, opaque::Block, RuntimeApi, SLOT_DURATION};
 use futures::StreamExt;
 use sc_cli::SubstrateCli;
 use sc_client_api::{BlockchainEvents, ExecutorProvider};
-use sc_consensus_vote_election::{ImportQueueParams, SlotProportion};
+use sc_consensus_vote_election::{ImportQueueParams, };
 // use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 // #[cfg(feature = "manual-seal")]
 // use sc_consensus_manual_seal::{self as manual_seal};
@@ -22,7 +22,7 @@ use sc_keystore::LocalKeystore;
 use sc_network::warp_request_handler::WarpSyncProvider;
 use sc_service::{error::Error as ServiceError, BasePath, Configuration, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
-use sp_consensus::SlotData;
+// use sp_consensus::SlotData;
 use sp_consensus_vote_election::sr25519::AuthorityPair as AuraPair;
 // use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use sp_core::U256;
@@ -207,7 +207,7 @@ pub fn new_partial(
 		frontier_backend.clone(),
 	);
 
-	let slot_duration = sc_consensus_vote_election::slot_duration(&*client)?.slot_duration();
+	// let slot_duration = sc_consensus_vote_election::slot_duration(&*client)?.slot_duration();
 	let target_gas_price = cli.run.target_gas_price;
 
 	let import_queue =
@@ -218,16 +218,16 @@ pub fn new_partial(
 			create_inherent_data_providers: move |_, ()| async move {
 				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-				let slot =
-					sp_consensus_vote_election::inherents::InherentDataProvider::from_timestamp_and_duration(
-						*timestamp,
-						slot_duration,
-					);
+				// let slot =
+				// 	sp_consensus_vote_election::inherents::InherentDataProvider::from_timestamp_and_duration(
+				// 		*timestamp,
+				// 		slot_duration,
+				// 	);
 
 				let dynamic_fee =
 					pallet_dynamic_fee::InherentDataProvider(U256::from(target_gas_price));
 
-				Ok((timestamp, slot, dynamic_fee))
+				Ok((timestamp, dynamic_fee))
 			},
 			spawner: &task_manager.spawn_essential_handle(),
 			can_author_with: sp_consensus::CanAuthorWithNativeVersion::new(
@@ -439,7 +439,7 @@ pub fn new_full(mut config: Configuration, cli: &Cli) -> Result<TaskManager, Ser
 
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
-	let backoff_authoring_blocks: Option<()> = None;
+	// let backoff_authoring_blocks: Option<()> = None;
 	let _name = config.network.node_name.clone();
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
@@ -562,32 +562,33 @@ pub fn new_full(mut config: Configuration, cli: &Cli) -> Result<TaskManager, Ser
 		// let can_author_with =
 		// 	sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
-		let slot_duration = sc_consensus_vote_election::slot_duration(&*client)?;
-		let raw_slot_duration = slot_duration.slot_duration();
+		// let slot_duration = sc_consensus_vote_election::slot_duration(&*client)?;
+		// let raw_slot_duration = slot_duration.slot_duration();
 		// let target_gas_price = cli.run.target_gas_price;
 
-		let ve_author = sc_consensus_vote_election::start_author::<AuraPair, _, _, _, _, _, _, _, _, _, _, _>(
+		let ve_author = sc_consensus_vote_election::start_author::<AuraPair, _, _, _, _, _, _, _, _, _>(
 			client.clone(),
 			block_import,
 			proposer_factory,
 			move |_, ()| async move {
 				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-				let slot =
-					sp_consensus_vote_election::inherents::InherentDataProvider::from_timestamp_and_duration(
-						*timestamp,
-						raw_slot_duration,
-					);
+				// let slot =
+				// 	sp_consensus_vote_election::inherents::InherentDataProvider::from_timestamp_and_duration(
+				// 		*timestamp,
+				// 		raw_slot_duration,
+				// 	);
 
-				Ok((timestamp, slot))
+				// Ok((timestamp, slot))
+				Ok((timestamp, ))
 			},
 			network.clone(),
-			network.clone(),
+			// network.clone(),
 			force_authoring,
-			backoff_authoring_blocks, 
+			// backoff_authoring_blocks, 
 			keystore_container.sync_keystore(),
-			SlotProportion::new(2f32 / 3f32),
-			None,
+			// SlotProportion::new(2f32 / 3f32),
+			// None,
 			telemetry.as_ref().map(|x| x.handle()),
 			select_chain.clone(),
 			network.clone(),

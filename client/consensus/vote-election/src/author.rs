@@ -1,5 +1,5 @@
 use crate::{
-	slot_worker, import_queue, utils,
+	import_queue, utils,
     AuthorityId, authorities, MAX_VOTE_RANK, COMMITTEE_TIMEOUT, PROPOSAL_TIMEOUT,
 };
 
@@ -30,7 +30,7 @@ use sp_blockchain::{HeaderBackend};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
     generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, /*NumberFor*/},
 	// traits::{Block as BlockT, HashFor, Header as HeaderT, Zero},
 	DigestItem,
 };
@@ -55,13 +55,15 @@ use sc_consensus::{BlockImport, BlockImportParams, StateAction, ForkChoiceStrate
 use sc_telemetry::{TelemetryHandle};
 
 // use slots::Slots;
-use slot_worker::{
-	// BackoffAuthoringBlocksStrategy, SlotInfo, StorageChanges,
-	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, StorageChanges,
-	// SimpleSlotWorker,
-	// ElectionWeightInfo,
-};
-pub use slot_worker::{SlotProportion, SlotResult};
+// use slot_worker::{
+// 	// BackoffAuthoringBlocksStrategy, SlotInfo, StorageChanges,
+// 	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, StorageChanges,
+// 	// SimpleSlotWorker,
+// 	// ElectionWeightInfo,
+// };
+// pub use slot_worker::{SlotProportion, SlotResult};
+use crate::worker::{InherentDataProviderExt, StorageChanges};
+
 pub use import_queue::{
 	build_verifier, AuraVerifier, BuildVerifierParams, CheckForEquivocation,
 	ImportQueueParams,
@@ -84,7 +86,7 @@ pub struct StateInfo<B: BlockT, P: Pair>{
 	election_vec: Vec<ElectionData<B>>,
 }
 
-pub struct AuthorWorker<P, B, C, E, I, L, BS, SO, VL, CIDP>
+pub struct AuthorWorker<P, B, C, E, I, SO, VL, CIDP>
 where
 	B: BlockT,
 	P: Pair,
@@ -93,12 +95,12 @@ where
 	pub block_import: I,
 	pub env: E,
 	pub sync_oracle: SO,
-	pub justification_sync_link: L,
+	// pub justification_sync_link: L,
 	pub force_authoring: bool,
-	pub backoff_authoring_blocks: Option<BS>,
+	// pub backoff_authoring_blocks: Option<BS>,
 	pub keystore: SyncCryptoStorePtr,
-	pub block_proposal_slot_portion: SlotProportion,
-	pub max_block_proposal_slot_portion: Option<SlotProportion>,
+	// pub block_proposal_slot_portion: SlotProportion,
+	// pub max_block_proposal_slot_portion: Option<SlotProportion>,
 	pub telemetry: Option<TelemetryHandle>,
 
 	pub create_inherent_data_providers: CIDP,
@@ -121,7 +123,7 @@ where
 // 	VL: VoteLink<B> + Send + Clone,
 
 // #[async_trait::async_trait]
-impl<P, B, C, E, I, L, BS, SO, VL, CIDP, Error> AuthorWorker<P, B, C, E, I, L, BS, SO, VL, CIDP> 
+impl<P, B, C, E, I, SO, VL, CIDP, Error> AuthorWorker<P, B, C, E, I, SO, VL, CIDP> 
 where
 	B: BlockT,
 	P: Pair + Send + Sync,
@@ -135,13 +137,13 @@ where
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	VL: VoteLink<B> + Send + Clone,
 
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	// BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	// PF: Environment<B, Error = Error> + Send + Sync + 'static,
 	// PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	SO: SyncOracle<B> + Send + Sync + Clone,
 	// SC: SelectChain<B>,
-	L: sc_consensus::JustificationSyncLink<B>,
+	// L: sc_consensus::JustificationSyncLink<B>,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
@@ -578,11 +580,11 @@ where
 			};
 
 
-			let (block, storage_proof) = (proposal.block, proposal.proof);
+			let (block, _storage_proof) = (proposal.block, proposal.proof);
 			let (header, body) = block.deconstruct();
 			let header_num = *header.number();
 			let header_hash = header.hash();
-			let parent_hash = *header.parent_hash();
+			// let parent_hash = *header.parent_hash();
 
 			let block_import_params_maker = self.block_import_params();
 			let block_import_params = match block_import_params_maker(
@@ -932,9 +934,9 @@ where
 // fn recv_election_and_update_weight()
 // fn proposal_block()
 
-pub async fn run_author_worker<P, B, C, I, L, BS, SO, SC, PF, VL, CIDP, Error>(
+pub async fn run_author_worker<P, B, C, I, SO, SC, PF, VL, CIDP, Error>(
 	client: Arc<C>,
-	mut worker: AuthorWorker<P, B, C, PF, I, L, BS, SO, VL, CIDP>,
+	mut worker: AuthorWorker<P, B, C, PF, I, SO, VL, CIDP>,
 	select_chain: SC,
 	mut sync_oracle: SO,
 	mut vote_link: VL,
@@ -951,14 +953,14 @@ where
 	// E: Environment<B, Error = Error>,
 	// E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	// BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	SO: SyncOracle<B> + Send + Sync + Clone,
 	SC: SelectChain<B>,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
-	L: sc_consensus::JustificationSyncLink<B>,
+	// L: sc_consensus::JustificationSyncLink<B>,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
     enum AuthorState<H>{

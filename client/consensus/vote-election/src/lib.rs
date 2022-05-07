@@ -3,8 +3,8 @@ mod utils;
 mod committee;
 mod author;
 mod finalizer;
-mod slot_worker;
-mod slots;
+// mod slot_worker;
+// mod slots;
 mod worker;
 
 use codec::{Codec, Decode, Encode};
@@ -22,8 +22,8 @@ use std::{
 
 use sc_client_api::{
 	BlockchainEvents, BlockOf,
-	UsageProvider,
-	backend::{AuxStore, Backend as ClientBackend, Finalizer},
+	// UsageProvider,
+	// backend::{AuxStore},
 	// BlockchainEvents, ImportNotifications, BlockOf, FinalityNotification,
 };
 
@@ -32,18 +32,18 @@ use sp_keystore::{SyncCryptoStorePtr};
 use sp_core::crypto::{Pair, };
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::{AppPublic,};
-use sp_blockchain::{HeaderBackend, Result as CResult};
+use sp_blockchain::{HeaderBackend, /*Result as CResult*/};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
     generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, Zero},
 	// traits::{Block as BlockT, HashFor, Header as HeaderT, Zero},
 	// DigestItem,
 };
 
 use sp_consensus::{
     Error as ConsensusError,
-    SelectChain, SyncOracle, VELink as VoteLink, SlotData,
+    SelectChain, SyncOracle, VELink as VoteLink,
     // CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle, VELink as VoteLink,
 	Environment, Proposer, 
 };
@@ -61,13 +61,15 @@ use sc_consensus::{BlockImport, };
 use sc_telemetry::{TelemetryHandle, };
 
 // use slots::Slots;
-use slot_worker::{
-	// BackoffAuthoringBlocksStrategy, SlotInfo, StorageChanges,
-	BackoffAuthoringBlocksStrategy, InherentDataProviderExt,
-	// SimpleSlotWorker,
-	// ElectionWeightInfo,
-};
-pub use slot_worker::{SlotProportion, SlotResult};
+// use slot_worker::{
+// 	// BackoffAuthoringBlocksStrategy, SlotInfo, StorageChanges,
+// 	BackoffAuthoringBlocksStrategy, InherentDataProviderExt,
+// 	// SimpleSlotWorker,
+// 	// ElectionWeightInfo,
+// };
+// pub use slot_worker::{SlotProportion, SlotResult};
+
+use worker::InherentDataProviderExt;
 pub use import_queue::{
 	build_verifier, import_queue, AuraVerifier, BuildVerifierParams, CheckForEquivocation,
 	ImportQueueParams,
@@ -84,26 +86,26 @@ pub use finalizer::run_simple_finalizer;
 
 type AuthorityId<P> = <P as Pair>::Public;
 
-pub type SlotDuration = slot_worker::SlotDuration<sp_consensus_vote_election::SlotDuration>;
+// pub type SlotDuration = slot_worker::SlotDuration<sp_consensus_vote_election::SlotDuration>;
 
 pub const MAX_VOTE_RANK: usize = 5;
 pub const COMMITTEE_TIMEOUT: u64 = 4;
 pub const PROPOSAL_TIMEOUT: u64 = COMMITTEE_TIMEOUT - 1;
 
-/// Get type of `SlotDuration` for Aura.
-pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
-where
-	A: Codec,
-	B: BlockT,
-	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
-	C::Api: VoteApi<B, A>,
-{
-	// SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b).map_err(Into::into))
-	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
-	let slot_duration = client.runtime_api().slot_duration(&best_block_id)?;
+// /// Get type of `SlotDuration` for Aura.
+// pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
+// where
+// 	A: Codec,
+// 	B: BlockT,
+// 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
+// 	C::Api: VoteApi<B, A>,
+// {
+// 	// SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b).map_err(Into::into))
+// 	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
+// 	let slot_duration = client.runtime_api().slot_duration(&best_block_id)?;
 
-	Ok(SlotDuration::new(slot_duration))
-}
+// 	Ok(SlotDuration::new(slot_duration))
+// }
 
 pub fn start_committee<P, B, C, SC, SO, VL>(
     client: Arc<C>,
@@ -134,18 +136,18 @@ where
     ))
 }
 
-pub fn start_author<P, B, C, I, L, BS, CIDP, SO, SC, PF, VL, Error>(
+pub fn start_author<P, B, C, I, CIDP, SO, SC, PF, VL, Error>(
 	client: Arc<C>,
 	block_import: I,
 	proposal_factory: PF,
 	create_inherent_data_providers: CIDP,
 	sync_oracle: SO,
-	justification_sync_link: L,
+	// justification_sync_link: L,
 	force_authoring: bool,
-	backoff_authoring_blocks: Option<BS>,
+	// backoff_authoring_blocks: Option<BS>,
     keystore: SyncCryptoStorePtr,
-	block_proposal_slot_portion: SlotProportion,
-	max_block_proposal_slot_portion: Option<SlotProportion>,
+	// block_proposal_slot_portion: SlotProportion,
+	// max_block_proposal_slot_portion: Option<SlotProportion>,
 	telemetry: Option<TelemetryHandle>,
 	select_chain: SC,
 	vote_link: VL,
@@ -159,7 +161,7 @@ where
 	// C: ProvideRuntimeApi<B> + BlockchainEvents<B> + BlockOf + Sync + Send + 'static, 
 	C::Api: VoteApi<B, AuthorityId<P>>,
 	VL: VoteLink<B> + Send + Clone,
-	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	// BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	// E: Environment<B, Error = Error>,
 	// E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
@@ -167,7 +169,7 @@ where
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	SO: SyncOracle<B> + Send + Sync + Clone,
 	SC: SelectChain<B>,
-	L: sc_consensus::JustificationSyncLink<B>,
+	// L: sc_consensus::JustificationSyncLink<B>,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
@@ -175,17 +177,17 @@ where
 	// let slots =
 	// 	Slots::new(slot_duration.slot_duration(), create_inherent_data_providers, select_chain.clone());
 
-	let worker = author::AuthorWorker::<P, _, _, _, _, _, _, _, _, _>{
+	let worker = author::AuthorWorker::<P, _, _, _, _, _, _, _>{
 		client: client.clone(),
 		block_import,
 		env: proposal_factory,
 		sync_oracle: sync_oracle.clone(),
-		justification_sync_link,
+		// justification_sync_link,
 		force_authoring,
-		backoff_authoring_blocks,
+		// backoff_authoring_blocks,
 		keystore,
-		block_proposal_slot_portion,
-		max_block_proposal_slot_portion,
+		// block_proposal_slot_portion,
+		// max_block_proposal_slot_portion,
 		telemetry,
 		create_inherent_data_providers,
 		// slots,
@@ -193,7 +195,7 @@ where
 		state_info: None,
 	};
 
-	Ok(author::run_author_worker::<P, B, C, I, L, BS, SO, SC, PF, VL, CIDP, Error>(
+	Ok(author::run_author_worker::<P, B, C, I, SO, SC, PF, VL, CIDP, Error>(
         client,
         worker,
         select_chain,

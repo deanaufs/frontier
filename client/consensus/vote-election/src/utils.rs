@@ -4,7 +4,6 @@ use std::{
 	fmt::Debug,
 };
 use sp_api::{ProvideRuntimeApi};
-// use sp_api::HeaderT;
 
 use sp_runtime::{
 	traits::{Block as BlockT, Header},
@@ -12,8 +11,6 @@ use sp_runtime::{
 
 use sc_client_api::{
 	BlockOf,
-	// backend::{AuxStore, Backend as ClientBackend, Finalizer},
-	// BlockOf, UsageProvider, BlockchainEvents, ImportNotifications
 };
 
 use sp_runtime::{
@@ -22,9 +19,6 @@ use sp_runtime::{
 
 use sp_consensus::{
 	ElectionData,
-    // Error as ConsensusError,
-    // CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle, VELink as VoteLink,
-	// VoteElectionRequest, VoteData, ElectionData
 };
 
 use sp_consensus_vote_election::VoteElectionApi;
@@ -76,7 +70,7 @@ pub fn caculate_weight_from_elections<B: BlockT>(
 	)
 }
 
-pub fn caculate_weight_from_elections_with_detail<B: BlockT>(
+pub fn caculate_weight_from_elections_with_output<B: BlockT>(
 	pub_bytes: &Vec<u8>,
 	election_vec: &Vec<ElectionData<B>>,
 	committee_count: usize,

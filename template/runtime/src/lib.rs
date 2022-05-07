@@ -557,10 +557,6 @@ impl_runtime_apis! {
 	}
 
 	impl sp_consensus_vote_election::VoteElectionApi<Block, VoteElectionId> for Runtime {
-		fn slot_duration() -> sp_consensus_vote_election::SlotDuration {
-			sp_consensus_vote_election::SlotDuration::from_millis(VoteElection::slot_duration())
-		}
-
 		fn authorities() -> Vec<VoteElectionId> {
 			VoteElection::authorities().into_inner()
 		}

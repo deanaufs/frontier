@@ -1,6 +1,7 @@
 use crate::{
 	import_queue, utils,
     AuthorityId, authorities, MAX_VOTE_RANK, COMMITTEE_TIMEOUT, PROPOSAL_TIMEOUT,
+	ElectionWeightInfo,
 };
 
 use codec::{Decode, Encode};
@@ -13,6 +14,7 @@ use std::{
     time::{SystemTime, Duration},
 	pin::Pin,
 };
+use schnorrkel::vrf::{VRFOutput};
 
 use sc_client_api::{
 	BlockchainEvents, BlockOf, 
@@ -30,7 +32,7 @@ use sp_blockchain::{HeaderBackend};
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
     generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, /*NumberFor*/},
+	traits::{Block as BlockT, Header as HeaderT, Zero /*NumberFor*/},
 	// traits::{Block as BlockT, HashFor, Header as HeaderT, Zero},
 	DigestItem,
 };
@@ -174,7 +176,6 @@ where
 			Err(format!("no public key"))?
 		}
 		let pub_bytes = sr25519_public_keys[0].to_raw_vec();
-
 		
 		self.state_info = Some(StateInfo{
 			cur_header: cur_header.clone(),
@@ -275,7 +276,7 @@ where
 		let state_info = self.state_info.as_mut().ok_or(format!("no state info"))?;
 		state_info.election_vec.push(election.clone());
 
-		let cur_weight = utils::caculate_weight_from_elections_with_detail(
+		let cur_weight = utils::caculate_weight_from_elections_with_output(
 			&state_info.pub_bytes,
 			&state_info.election_vec,
 			state_info.committee_vec.len(),
@@ -285,15 +286,63 @@ where
 		Ok(cur_weight)
     }
 
-	fn get_min_max_weight(&self, header: &B::Header)->Result<(u64, u64), String>{
-		let state_info = self.state_info.as_ref().ok_or(format!("no state info"))?;
-		if header.hash() == state_info.cur_header.hash(){
-			Ok((state_info.min_weight, state_info.max_weight))
+	fn caculate_election_info_from_header(&self, header: &B::Header)->Result<ElectionWeightInfo, String>{
+		if header.number().is_zero(){
+			return Ok(ElectionWeightInfo{
+				weight: 0u64,
+				vrf_num: 0u128,
+				exceed_half: true,
+			});
 		}
-		else{
-			Err(format!("invalid header"))
-		}
+		let state_info = self.state_info.as_ref().ok_or(format!("state info not exist"))?;
+
+		let pre_digest = crate::find_pre_digest::<B, P::Signature>(&header)
+			.map_err(|e|format!("find_pre_digest failed: {}", e))?;
+
+		let vrf_output = VRFOutput::from_bytes(pre_digest.vrf_output_bytes.as_slice())
+			.map_err(|e|format!("Decode vrf output failed: {}", e))?;
+
+		let block_election_bytes = pre_digest.election_bytes;
+		let block_election_vec = <Vec<ElectionData<B>>>::decode(&mut block_election_bytes.as_slice())
+			.map_err(|e|format!("Decode election data failed: {}", e))?;
+		
+		let block_builder_public_bytes = pre_digest.pub_key_bytes.clone();
+
+		let cur_weight = utils::caculate_weight_from_elections(
+			&block_builder_public_bytes,
+			&block_election_vec,
+			state_info.committee_vec.len(),
+			MAX_VOTE_RANK
+		);
+
+		let block_builder_public = PublicKey::from_bytes(pre_digest.pub_key_bytes.as_slice())
+			.map_err(|e|format!("Decode public key failed: {}", e))?;
+
+		let transcript = make_transcript(&header.parent_hash().encode());
+
+		let vrf_num = match vrf_output.attach_input_hash(&block_builder_public, transcript){
+			Ok(inout)=>u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(VOTE_VRF_PREFIX)),
+			Err(e)=> Err(format!("gen vrf number failed: {}", e))?,
+		};
+
+		let election_weight_info = ElectionWeightInfo{
+			weight: cur_weight,
+			vrf_num,
+			exceed_half: cur_weight <= state_info.min_weight,
+		};
+
+		return Ok(election_weight_info);
 	}
+
+	// fn get_min_max_weight(&self, header: &B::Header)->Result<(u64, u64), String>{
+	// 	let state_info = self.state_info.as_ref().ok_or(format!("no state info"))?;
+	// 	if header.hash() == state_info.cur_header.hash(){
+	// 		Ok((state_info.min_weight, state_info.max_weight))
+	// 	}
+	// 	else{
+	// 		Err(format!("invalid header"))
+	// 	}
+	// }
 
 	fn verify_election(&self, election_data: &ElectionData<B>)->Result<(), String>{
 		let state_info = self.state_info.as_ref().ok_or(format!("no state info"))?;
@@ -936,7 +985,7 @@ where
 
 pub async fn run_author_worker<P, B, C, I, SO, SC, PF, VL, CIDP, Error>(
 	client: Arc<C>,
-	mut worker: AuthorWorker<P, B, C, PF, I, SO, VL, CIDP>,
+	mut author: AuthorWorker<P, B, C, PF, I, SO, VL, CIDP>,
 	select_chain: SC,
 	mut sync_oracle: SO,
 	mut vote_link: VL,
@@ -991,7 +1040,8 @@ where
                                 log::info!("Author.S0, import block: #{} ({})", block.header.number(), block.hash);
                                 if sync_oracle.is_major_syncing(){
                                     state = AuthorState::WaitStart;
-                                    break;
+									continue 'outer;
+                                    // break;
                                 }
 
                                 state = AuthorState::WaitProposal(block.header);
@@ -1018,19 +1068,19 @@ where
                     }
                 }
             },
-            AuthorState::WaitProposal(cur_header)=>{
+            AuthorState::WaitProposal(parent_header)=>{
 				log::info!(
 					"► AuthorState::S1 #{} ({}), propagate vote and wait proposal",
-					cur_header.number(),
-					cur_header.hash(),
+					parent_header.number(),
+					parent_header.hash(),
 				);
-				if let Err(e) = worker.reset_state_info(&cur_header){
+				if let Err(e) = author.reset_state_info(&parent_header){
 					log::warn!("Author.S1: reset state info err, {}", e);
 					state = AuthorState::WaitStart;
 					continue 'outer;
 				}
 
-				let (_, vrf_sig) = match worker.generate_vrf_and_propagate(&cur_header){
+				let (local_vrf_num, vrf_sig) = match author.generate_vrf_and_propagate(&parent_header){
 					Ok(x)=>x,
 					Err(e)=>{
 						log::warn!("Author.S1: propagate vote err: {}", e);
@@ -1039,16 +1089,28 @@ where
 					}
 				};
 
-				// let worker = AuthorWorker::new(&cur_header);
-				// worker.reset_state(&cur_header);
-				let (min_weight, max_weight) = match worker.get_min_max_weight(&cur_header){
-					Ok(x)=>x,
-					Err(e)=>{
-						log::warn!("Author.S1: get min max weight failed: {}", e);
+				let (min_weight, max_weight) = match author.state_info.as_ref(){
+					Some(v)=>{
+						(v.min_weight, v.max_weight)
+					},
+					None=>{
+						log::warn!("Author.S1: get min max weight failed");
 						state = AuthorState::WaitStart;
 						continue 'outer;
 					}
 				};
+
+				let parent_block_election_info = match author.caculate_election_info_from_header(&parent_header){
+					Ok(v)=>v,
+					Err(e) => {
+						log::info!("Author.S1, caculate block election weight error, {:?}, #{} ({})",
+							e, parent_header.number(), parent_header.hash()
+						);
+						state = AuthorState::WaitStart;
+						continue 'outer;
+					},
+				};
+				let parent_block_weight = parent_block_election_info.weight;
 
 				let full_timeout_duration = Duration::from_secs(COMMITTEE_TIMEOUT*3);
 				let start_time = SystemTime::now();
@@ -1073,17 +1135,100 @@ where
 									continue 'outer;
 								}
 
-                                state = AuthorState::WaitProposal(block.header);
-                                continue 'outer;
+								let incoming_block_election_info = match author.caculate_election_info_from_header(&block.header){
+									Ok(v)=>v,
+									Err(e) => {
+										log::info!("Author.S1, caculate block election weight error, {:?}, #{} ({})",
+											e, block.header.number(), block.header.hash()
+										);
+										continue
+									},
+								};
+
+								if incoming_block_election_info.exceed_half{
+									log::info!(
+										"Author.S1, import block #{} ({}) from outside with exceed 50% election", 
+										block.header.number(),
+										block.hash
+									);
+
+									if *block.header.parent_hash() != parent_header.hash(){
+										log::warn!(
+											"Author.S1, AS1#01 need handle: #{}({}) is not the next block for current block #{}({})",
+											block.header.number(),
+											block.header.hash(),
+											parent_header.number(),
+											parent_header.hash(),
+										);
+									}
+									state = AuthorState::WaitProposal(block.header);
+									continue 'outer;
+								}
+
+								// import block for next height
+								if block.header.parent_hash() == &parent_header.hash(){
+									if incoming_block_election_info.vrf_num < local_vrf_num {
+										log::info!(
+											"Author.S1, block #{}({}) outside with smaller random",
+											block.header.number(),
+											block.hash,
+										);
+										state = AuthorState::WaitProposal(block.header);
+										continue 'outer;
+									}
+									else{
+										log::info!(
+											"Author.S1, ignore block because local vrf smaller, local: 0x{:0>32X} < 0x{:0>32X}",
+											local_vrf_num,
+											incoming_block_election_info.vrf_num,
+										);
+									}
+								}
+								// import block with same height
+								else if block.header.parent_hash() == parent_header.parent_hash(){
+								// else if block.header.hash() == cur_header.hash(){
+									if incoming_block_election_info.weight < parent_block_weight{
+										log::info!("Author.S1: change to a block with less weight, #{}({})",
+											block.header.number(), block.hash) ;
+										state = AuthorState::WaitProposal(block.header);
+										continue 'outer;
+									}
+									else{
+										log::info!(
+											"Author.S1: ignore block with larger weight, #{}({}), cur: {}, new: {}",
+											block.header.number(),
+											block.hash,
+											parent_block_weight,
+											incoming_block_election_info.weight,
+										);
+									}
+								}
+								else{
+									log::warn!(
+										"Author.S1, AS1#02 need handle: cur: #{}({}), new: #{}({})",
+										parent_header.number(),
+										parent_header.hash(),
+										block.header.number(),
+										block.header.hash(),
+									);
+								}
+
+								log::info!(
+									"Author.S1: ignore the block: #{} ({})",
+									block.header.number(),
+									block.hash
+								);
+                                // state = AuthorState::WaitProposal(block.header);
+                                continue;
                             }
                         },
                         election = election_rx.select_next_some()=>{
 							// log::info!("Author.S1, recv election");
-							if let Ok(cur_weight) = worker.recv_election_and_update_weight(&election){
-								rest_timeout_rate = update_s1_timeout_rate(
-									cur_weight,
-									min_weight,
-									max_weight,
+							if let Ok(cur_weight) = author.recv_election_and_update_weight(&election){
+								rest_timeout_rate = update_author_s1_timeout_rate(
+									&cur_weight,
+									&min_weight,
+									&max_weight,
 									&mut min_weight_delay_count,
 									&mut not_min_weight_delay_count,
 								);
@@ -1092,29 +1237,12 @@ where
                         },
                         _ = timeout.fuse()=>{
 							log::info!("Author.S1, timeout");
-							match worker.proposal_block(vrf_sig).await{
+							match author.proposal_block(vrf_sig).await{
 								Ok(_)=>{},
 								Err(e)=>{
 									log::info!("Author.S1, propsoal block failed: {}", e);
 								}
 							}
-							// if cur_election_weight < max_election_weight {
-							// 	log::info!(
-							// 		"Author.S1: timeout, prepare block at: #{} ({})",
-							// 		cur_header.number(),
-							// 		cur_header.hash(),
-							// 	);
-							// 	if let Ok(slot_info) = slots.default_slot().await{
-							// 		let _ = worker.produce_block(slot_info, &cur_header, &vrf_signature, election_vec).await;
-							// 	}
-							// }
-							// else{
-							// 	log::info!(
-							// 		"Author.S1: timeout, no weight build block at: #{} ({})",
-							// 		cur_header.number(),
-							// 		cur_header.hash(),
-							// 	);
-							// }
 
 							state = AuthorState::WaitStart;
 							continue 'outer;
@@ -1141,10 +1269,10 @@ where
 		return Delay::new(duration);
 	}
 
-	fn update_s1_timeout_rate(
-		cur_election_weight: u64,
-		min_election_weight: u64,
-		max_election_weight: u64,
+	fn update_author_s1_timeout_rate(
+		cur_election_weight: &u64,
+		min_election_weight: &u64,
+		max_election_weight: &u64,
 		min_weight_delay_count: &mut u64,
 		not_min_weight_delay_count: &mut u64,
 	)->f32
@@ -1153,7 +1281,7 @@ where
 			if cur_election_weight <= min_election_weight{
 				if *min_weight_delay_count < 10 { 
 					*min_weight_delay_count += 1;
-					0.01 
+					0.015f32
 				}
 				else {
 					0.0
@@ -1163,9 +1291,9 @@ where
 				let rate = (cur_election_weight - min_election_weight) as f32 /
 					(max_election_weight - min_election_weight) as f32;
 				
-				if *not_min_weight_delay_count < 20{
+				if *not_min_weight_delay_count < 10{
 					*not_min_weight_delay_count += 1;
-					rate + 0.1f32
+					rate + 0.66f32
 				}
 				else{
 					rate

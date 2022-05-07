@@ -172,13 +172,6 @@ impl<T: Config> Pallet<T> {
 	fn current_slot_from_digests() -> Option<Slot> {
 		None
 	}
-
-	/// Determine the Aura slot-duration based on the Timestamp module configuration.
-	pub fn slot_duration() -> T::Moment {
-		// we double the minimum block-period so each author can always propose within
-		// the majority of its slot.
-		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
-	}
 }
 
 impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {

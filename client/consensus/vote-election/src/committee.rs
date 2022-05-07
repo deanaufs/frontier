@@ -101,8 +101,8 @@ where
 
 			let mut keys = bt_map.keys().cloned().collect::<Vec<_>>();
 			while bt_map.len() > MAX_VOTE_RANK{
-				keys.pop().as_ref().map(|x|{
-					bt_map.remove(x)
+				keys.pop().map(|x|{
+					bt_map.remove(&x)
 				});
 			}
         }
@@ -262,7 +262,7 @@ where
 
 pub async fn start_committee_worker<B, C, P, SC, SO, VL>(
 	client: Arc<C>,
-	mut worker: CommitteeWorker<B, C, P, VL>,
+	mut committee: CommitteeWorker<B, C, P, VL>,
     select_chain: SC,
 	mut sync_oracle: SO,
 	mut vote_link: VL,
@@ -326,7 +326,7 @@ where
                                     continue;
                                 }
 
-                                if worker.is_committee_at(&block.hash){
+                                if committee.is_committee_at(&block.hash){
                                     state = CommitteeState::RecvVote(block.header);
                                     continue 'outer;
                                 }
@@ -343,7 +343,7 @@ where
                             init_state = false;
 
                             if let Some(header) = genesis_header.take(){
-                                if worker.is_committee_at(&header.hash()){
+                                if committee.is_committee_at(&header.hash()){
                                     log::info!("Committee.S0, time out from genesis");
                                     state = CommitteeState::RecvVote(header);
                                     continue 'outer;
@@ -352,26 +352,26 @@ where
                         },
                         vote_data = vote_rx.select_next_some()=>{
                             // log::info!("Committee.S0, recv vote");
-                            let _ = worker.on_recv_vote(&vote_data);
+                            let _ = committee.on_recv_vote(&vote_data);
                             continue;
                         },
                         block = finality_notification_stream.next()=>{
                             // log::info!("Committee.S0, block finalize");
-                            worker.on_finalize_block(block);
+                            committee.on_finalize_block(block);
                             continue;
                         },
                     }
                 }
             },
 
-            CommitteeState::RecvVote(cur_header)=>{
+            CommitteeState::RecvVote(parent_header)=>{
 				log::info!(
 					"► CommitteeState::S1 #{} ({}), recv vote and send election",
-					cur_header.number(),
-					cur_header.hash(),
+					parent_header.number(),
+					parent_header.hash(),
 				);
 
-                let cur_block_election_info = match worker.caculate_election_info_from_header(&cur_header){
+                let parent_block_election_info = match committee.caculate_election_info_from_header(&parent_header){
                     Ok(v) => v,
                     Err(e) => {
 						state = CommitteeState::WaitStart;
@@ -398,11 +398,11 @@ where
                                     continue 'outer;
                                 }
 
-                                if !worker.is_committee_at(&block.hash){
+                                if !committee.is_committee_at(&block.hash){
                                     continue;
                                 }
 
-                                if let Ok(import_block_election_info) = worker.caculate_election_info_from_header(&block.header){
+                                if let Ok(import_block_election_info) = committee.caculate_election_info_from_header(&block.header){
                                     if import_block_election_info.exceed_half{
                                         log::info!(
                                             "Committee.S1: recv block with 50% exceed, #{}({})",
@@ -413,8 +413,8 @@ where
                                         break;
                                     }
 
-                                    if block.header.parent_hash() == cur_header.parent_hash() &&
-                                        import_block_election_info.weight < cur_block_election_info.weight
+                                    if block.header.parent_hash() == parent_header.parent_hash() &&
+                                        import_block_election_info.weight < parent_block_election_info.weight
                                     {
                                         log::info!("Committee.S1: recv block with higher priority, #{}({})", block.header.number(), block.hash);
                                         state = CommitteeState::RecvVote(block.header);
@@ -427,19 +427,19 @@ where
                         },
                         _ = timeout.fuse()=>{
                             log::info!("Committee.S1, timeout");
-                            worker.propagate_election(&cur_header);
+                            committee.propagate_election(&parent_header);
                             state = CommitteeState::WaitStart;
                             continue 'outer;
                             // break;
                         },
                         vote_data = vote_rx.select_next_some()=>{
                             // log::info!("Committee.S1, recv vote");
-                            let _ = worker.on_recv_vote(&vote_data);
+                            let _ = committee.on_recv_vote(&vote_data);
                             continue;
                         },
                         block = finality_notification_stream.next()=>{
                             // log::info!("Committee.S1, block finalize");
-                            worker.on_finalize_block(block);
+                            committee.on_finalize_block(block);
                             continue;
                         },
                     }

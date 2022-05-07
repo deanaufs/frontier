@@ -234,7 +234,7 @@ pub fn new_partial(
 				client.executor().clone(),
 			),
 			registry: config.prometheus_registry(),
-			check_for_equivocation: Default::default(),
+			// check_for_equivocation: Default::default(),
 			telemetry: telemetry.as_ref().map(|x| x.handle()),
 		})?;
 

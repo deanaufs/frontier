@@ -28,6 +28,8 @@ use sp_std::vec::Vec;
 use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
 
 pub const VOTE_ENGINE_ID: ConsensusEngineId = *b"VOTE";
+// pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
+
 pub const VOTE_VRF_PREFIX: &[u8] = b"substrate-vote-vrf";
 
 pub mod digests;
@@ -35,8 +37,8 @@ pub mod inherents;
 
 pub mod sr25519 {
 	mod app_sr25519 {
-		use sp_application_crypto::{app_crypto, key_types::AURA, sr25519};
-		app_crypto!(sr25519, AURA);
+		use sp_application_crypto::{app_crypto, key_types::VOTE, sr25519};
+		app_crypto!(sr25519, VOTE);
 	}
 
 	sp_application_crypto::with_pair! {
@@ -53,8 +55,8 @@ pub mod sr25519 {
 
 pub mod ed25519 {
 	mod app_ed25519 {
-		use sp_application_crypto::{app_crypto, ed25519, key_types::AURA};
-		app_crypto!(ed25519, AURA);
+		use sp_application_crypto::{app_crypto, ed25519, key_types::VOTE};
+		app_crypto!(ed25519, VOTE);
 	}
 
 	sp_application_crypto::with_pair! {
@@ -72,7 +74,7 @@ pub mod ed25519 {
 pub use sp_consensus_slots::Slot;
 
 /// The `ConsensusEngineId` of AuRa.
-pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
+// pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
 
 /// The index of an authority.
 pub type AuthorityIndex = u32;
@@ -90,7 +92,7 @@ pub enum ConsensusLog<AuthorityId: Codec> {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with aura.
-	pub trait AuraApi<AuthorityId: Codec> {
+	pub trait VoteElectionApi<AuthorityId: Codec> {
 		/// Returns the slot duration for Aura.
 		///
 		/// Currently, only the value provided by this type at genesis will be used.

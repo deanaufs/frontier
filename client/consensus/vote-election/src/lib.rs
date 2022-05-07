@@ -52,7 +52,7 @@ pub use sp_consensus_vote_election::{
 	digests::{CompatibleDigestItem, PreDigest},
 	Slot,
 	// inherents::{InherentDataProvider, InherentType as AuraInherent, INHERENT_IDENTIFIER},
-	AuraApi as VoteApi, ConsensusLog, 
+	VoteElectionApi, ConsensusLog, 
 	make_transcript, make_transcript_data, VOTE_VRF_PREFIX,
 };
 // use sp_consensus_slots::Slot;
@@ -82,7 +82,6 @@ pub use finalizer::run_simple_finalizer;
 //     vrf::{VRFOutput, VRFProof}
 // };
 // use log::{debug, warn, info};
-
 
 type AuthorityId<P> = <P as Pair>::Public;
 
@@ -120,7 +119,7 @@ where
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Encode + Decode + Debug,
 	P::Signature: Encode + Decode,
-	C::Api: VoteApi<B, AuthorityId<P>>,
+	C::Api: VoteElectionApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	SO: SyncOracle<B> + Send,
 	VL: VoteLink<B> + Send + Clone,
@@ -159,7 +158,7 @@ where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockchainEvents<B> + HeaderBackend<B> + BlockOf + Sync + Send + 'static, 
 	// C: ProvideRuntimeApi<B> + BlockchainEvents<B> + BlockOf + Sync + Send + 'static, 
-	C::Api: VoteApi<B, AuthorityId<P>>,
+	C::Api: VoteElectionApi<B, AuthorityId<P>>,
 	VL: VoteLink<B> + Send + Clone,
 	// BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
 	// E: Environment<B, Error = Error>,
@@ -292,7 +291,7 @@ where
 	A: Codec + Debug,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf,
-	C::Api: VoteApi<B, A>,
+	C::Api: VoteElectionApi<B, A>,
 {
 	client
 		.runtime_api()
@@ -375,7 +374,7 @@ pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Resul
 	let mut pre_digest: Option<_> = None;
 	for log in header.digest().logs() {
 		log::trace!(target: "vote", "Checking log {:?}", log);
-		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
+		match (CompatibleDigestItem::<Signature>::as_ve_pre_digest(log), pre_digest.is_some()) {
 		// match (log.as_aura_pre_digest(), pre_digest.is_some()){
 			(Some(_), true) => return Err(vote_err(Error::MultipleHeaders)),
 			(None, _) => log::trace!(target: "vote", "Ignoring digest not meant for us"),

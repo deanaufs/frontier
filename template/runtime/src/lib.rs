@@ -14,8 +14,7 @@ use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use sp_api::impl_runtime_apis;
-use sp_consensus_vote_election::sr25519::AuthorityId as AuraId;
-// use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_consensus_vote_election::sr25519::AuthorityId as VoteElectionId;
 use sp_core::{
 	crypto::{KeyTypeId},
 	OpaqueMetadata, H160, H256, U256,
@@ -207,7 +206,7 @@ parameter_types! {
 }
 
 impl pallet_vote_election::Config for Runtime {
-	type AuthorityId = AuraId;
+	type AuthorityId = VoteElectionId;
 	type DisabledValidators = ();
 	type MaxAuthorities = MaxAuthorities;
 	// type MaxAuthorities = ConstU32<32>;
@@ -557,24 +556,15 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sp_consensus_vote_election::AuraApi<Block, AuraId> for Runtime {
+	impl sp_consensus_vote_election::VoteElectionApi<Block, VoteElectionId> for Runtime {
 		fn slot_duration() -> sp_consensus_vote_election::SlotDuration {
 			sp_consensus_vote_election::SlotDuration::from_millis(VoteElection::slot_duration())
 		}
 
-		fn authorities() -> Vec<AuraId> {
+		fn authorities() -> Vec<VoteElectionId> {
 			VoteElection::authorities().into_inner()
 		}
 	}
-	// impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
-	// 	fn slot_duration() -> sp_consensus_aura::SlotDuration {
-	// 		sp_consensus_aura::SlotDuration::from_millis(Aura::slot_duration())
-	// 	}
-
-	// 	fn authorities() -> Vec<AuraId> {
-	// 		Aura::authorities().to_vec()
-	// 	}
-	// }
 
 	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 		fn account_nonce(account: AccountId) -> Index {

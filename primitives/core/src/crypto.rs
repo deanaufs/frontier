@@ -1258,6 +1258,8 @@ pub mod key_types {
 	pub const REPORTING: KeyTypeId = KeyTypeId(*b"fish");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
+	/// Key type for Aura module, built-in. Identified as `vote`.
+	pub const VOTE: KeyTypeId = KeyTypeId(*b"vote");
 }
 
 #[cfg(test)]

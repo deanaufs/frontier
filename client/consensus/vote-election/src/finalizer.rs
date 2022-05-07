@@ -25,7 +25,7 @@ pub use sp_consensus_vote_election::{
 	digests::{CompatibleDigestItem, PreDigest},
 	Slot,
 	// inherents::{InherentDataProvider, InherentType as AuraInherent, INHERENT_IDENTIFIER},
-	AuraApi as VoteApi, ConsensusLog, 
+	VoteElectionApi, ConsensusLog, 
 	make_transcript, make_transcript_data, VOTE_VRF_PREFIX,
 };
 
@@ -39,7 +39,7 @@ where
     B: BlockT,
 	CB: ClientBackend<B>,
     C: BlockchainEvents<B> + Finalizer<B, CB> + ProvideRuntimeApi<B> + BlockOf + Sync,
-	C::Api: VoteApi<B, A>,
+	C::Api: VoteElectionApi<B, A>,
 	P: Pair + Send + Sync,
 	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
 {

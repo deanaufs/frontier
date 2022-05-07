@@ -38,13 +38,13 @@ use sp_blockchain::{
 };
 use sp_consensus::{CanAuthorWith, Error as ConsensusError, ElectionData};
 use sp_consensus_vote_election::{
-	digests::CompatibleDigestItem, AuraApi, ConsensusLog,
+	digests::CompatibleDigestItem, VoteElectionApi, ConsensusLog,
 	// digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi, ConsensusLog,
-	AURA_ENGINE_ID, make_transcript,
+	VOTE_ENGINE_ID, make_transcript,
 };
 // use sp_consensus_slots::Slot;
 use sp_core::{crypto::Pair, ExecutionContext};
-use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
 	traits::{Block as BlockT, Header},
@@ -84,7 +84,7 @@ where
 {
 	let seal = header.digest_mut().pop().ok_or_else(|| Error::HeaderUnsealed(block_hash))?;
 
-	let sig = seal.as_aura_seal().ok_or_else(|| vote_err(Error::HeaderBadSeal(block_hash)))?;
+	let sig = seal.as_ve_seal().ok_or_else(|| vote_err(Error::HeaderBadSeal(block_hash)))?;
 
 	let pre_digest = find_pre_digest::<B, P::Signature>(&header)?;
 
@@ -177,7 +177,7 @@ pub struct AuraVerifier<C, P, CAW, CIDP> {
 	phantom: PhantomData<P>,
 	create_inherent_data_providers: CIDP,
 	can_author_with: CAW,
-	check_for_equivocation: CheckForEquivocation,
+	// check_for_equivocation: CheckForEquivocation,
 	telemetry: Option<TelemetryHandle>,
 }
 
@@ -186,14 +186,14 @@ impl<C, P, CAW, CIDP> AuraVerifier<C, P, CAW, CIDP> {
 		client: Arc<C>,
 		create_inherent_data_providers: CIDP,
 		can_author_with: CAW,
-		check_for_equivocation: CheckForEquivocation,
+		// check_for_equivocation: CheckForEquivocation,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		Self {
 			client,
 			create_inherent_data_providers,
 			can_author_with,
-			check_for_equivocation,
+			// check_for_equivocation,
 			telemetry,
 			phantom: PhantomData,
 		}
@@ -253,7 +253,7 @@ where
 impl<B: BlockT, C, P, CAW, CIDP> Verifier<B> for AuraVerifier<C, P, CAW, CIDP>
 where
 	C: ProvideRuntimeApi<B> + Send + Sync + sc_client_api::backend::AuxStore + BlockOf,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
+	C::Api: BlockBuilderApi<B> + VoteElectionApi<B, AuthorityId<P>> + ApiExt<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
@@ -350,7 +350,7 @@ where
 					.iter()
 					.filter_map(|l| {
 						l.try_to::<ConsensusLog<AuthorityId<P>>>(OpaqueDigestItemId::Consensus(
-							&AURA_ENGINE_ID,
+							&VOTE_ENGINE_ID,
 						))
 					})
 					.find_map(|l| match l {
@@ -421,8 +421,8 @@ pub struct ImportQueueParams<'a, Block, I, C, S, CAW, CIDP> {
 	pub registry: Option<&'a Registry>,
 	/// Can we author with the current node?
 	pub can_author_with: CAW,
-	/// Should we check for equivocation?
-	pub check_for_equivocation: CheckForEquivocation,
+	// /// Should we check for equivocation?
+	// pub check_for_equivocation: CheckForEquivocation,
 	/// Telemetry instance used to report telemetry metrics.
 	pub telemetry: Option<TelemetryHandle>,
 }
@@ -437,13 +437,13 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 		spawner,
 		registry,
 		can_author_with,
-		check_for_equivocation,
+		// check_for_equivocation,
 		telemetry,
 	}: ImportQueueParams<'a, Block, I, C, S, CAW, CIDP>,
 ) -> Result<DefaultImportQueue<Block, C>, sp_consensus::Error>
 where
 	Block: BlockT,
-	C::Api: BlockBuilderApi<Block> + AuraApi<Block, AuthorityId<P>> + ApiExt<Block>,
+	C::Api: BlockBuilderApi<Block> + VoteElectionApi<Block, AuthorityId<P>> + ApiExt<Block>,
 	C: 'static
 		+ ProvideRuntimeApi<Block>
 		+ BlockOf
@@ -468,7 +468,7 @@ where
 		client,
 		create_inherent_data_providers,
 		can_author_with,
-		check_for_equivocation,
+		// check_for_equivocation,
 		telemetry,
 	});
 
@@ -483,8 +483,8 @@ pub struct BuildVerifierParams<C, CIDP, CAW> {
 	pub create_inherent_data_providers: CIDP,
 	/// Can we author with the current node?
 	pub can_author_with: CAW,
-	/// Should we check for equivocation?
-	pub check_for_equivocation: CheckForEquivocation,
+	// /// Should we check for equivocation?
+	// pub check_for_equivocation: CheckForEquivocation,
 	/// Telemetry instance used to report telemetry metrics.
 	pub telemetry: Option<TelemetryHandle>,
 }
@@ -495,7 +495,7 @@ pub fn build_verifier<P, C, CIDP, CAW>(
 		client,
 		create_inherent_data_providers,
 		can_author_with,
-		check_for_equivocation,
+		// check_for_equivocation,
 		telemetry,
 	}: BuildVerifierParams<C, CIDP, CAW>,
 ) -> AuraVerifier<C, P, CAW, CIDP> {
@@ -503,7 +503,7 @@ pub fn build_verifier<P, C, CIDP, CAW>(
 		client,
 		create_inherent_data_providers,
 		can_author_with,
-		check_for_equivocation,
+		// check_for_equivocation,
 		telemetry,
 	)
 }

@@ -46,7 +46,7 @@ pub use sp_consensus_vote_election::{
 	digests::{CompatibleDigestItem, PreDigest},
 	Slot,
 	// inherents::{InherentDataProvider, InherentType as AuraInherent, INHERENT_IDENTIFIER},
-	AuraApi as VoteApi, ConsensusLog, 
+	VoteElectionApi, ConsensusLog, 
 	make_transcript, make_transcript_data, VOTE_VRF_PREFIX,
 };
 // use sp_consensus_slots::Slot;
@@ -131,7 +131,7 @@ where
 	P::Signature: TryFrom<Vec<u8>> + Encode + Decode,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 	C: ProvideRuntimeApi<B> + BlockchainEvents<B> + HeaderBackend<B> + BlockOf + Sync + Send + 'static, 
-	C::Api: VoteApi<B, AuthorityId<P>>,
+	C::Api: VoteElectionApi<B, AuthorityId<P>>,
 	// E: Environment<B, Error = Error>,
 	E: Environment<B, Error = Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -168,7 +168,7 @@ where
 			utils::caculate_min_max_election_weight(committee_vec.len(), MAX_VOTE_RANK);
 
 		let sr25519_public_keys = SyncCryptoStore::sr25519_public_keys(
-			&*self.keystore, sp_application_crypto::key_types::AURA);
+			&*self.keystore, sp_application_crypto::key_types::VOTE);
 
 		if sr25519_public_keys.len() == 0{
 			Err(format!("no public key"))?
@@ -220,7 +220,7 @@ where
 	fn generate_vrf_data(&self, cur_hash: &B::Hash)->Result<(u128, VRFSignature), String>{
 		let sr25519_public_keys = SyncCryptoStore::sr25519_public_keys(
 			&*self.keystore, 
-			sp_application_crypto::key_types::AURA
+			sp_application_crypto::key_types::VOTE
 		);
 
 		if sr25519_public_keys.len() == 0{
@@ -387,7 +387,7 @@ where
 	) -> Option<(PreDigest, P::Public)> {
 		let sr25519_public_keys = SyncCryptoStore::sr25519_public_keys(
 			&*self.keystore, 
-			sp_application_crypto::key_types::AURA
+			sp_application_crypto::key_types::VOTE
 		);
 
 		if sr25519_public_keys.len() == 1{
@@ -415,7 +415,7 @@ where
 		claim: &(PreDigest, P::Public),
 	) -> Vec<sp_runtime::DigestItem<B::Hash>> {
 		// vec![<DigestItemFor<B> as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot.clone())]
-		vec![<DigestItem<B::Hash> as CompatibleDigestItem<P::Signature>>::aura_pre_digest(claim.0.clone())]
+		vec![<DigestItem<B::Hash> as CompatibleDigestItem<P::Signature>>::ve_pre_digest(claim.0.clone())]
 	}
 
 	fn epoch_data(
@@ -466,7 +466,7 @@ where
 				.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
 
 			let signature_digest_item =
-				<DigestItem<B::Hash> as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
+				<DigestItem<B::Hash> as CompatibleDigestItem<P::Signature>>::ve_seal(signature);
 
 			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 			import_block.post_digests.push(signature_digest_item);
@@ -948,7 +948,7 @@ where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockchainEvents<B> + HeaderBackend<B> + BlockOf + Sync + Send + 'static, 
 	// C: ProvideRuntimeApi<B> + BlockchainEvents<B> + BlockOf + Sync + Send + 'static, 
-	C::Api: VoteApi<B, AuthorityId<P>>,
+	C::Api: VoteElectionApi<B, AuthorityId<P>>,
 	VL: VoteLink<B> + Send + Clone,
 	// E: Environment<B, Error = Error>,
 	// E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,

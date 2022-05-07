@@ -27,7 +27,7 @@ use sp_consensus::{
 	// VoteElectionRequest, VoteData, ElectionData
 };
 
-use sp_consensus_vote_election::AuraApi;
+use sp_consensus_vote_election::VoteElectionApi;
 
 pub fn caculate_block_weight<A, B, S, C>(
 	header: &B::Header,
@@ -39,7 +39,7 @@ where
 	B: BlockT,
 	S: Codec,
 	C: ProvideRuntimeApi<B> + BlockOf,
-	C::Api: AuraApi<B, A>,
+	C::Api: VoteElectionApi<B, A>,
 {
 	let committee_vec = authorities(client, &BlockId::Hash(header.hash()))
 		.map_err(|_|Error::NoCommitteeFound)?;

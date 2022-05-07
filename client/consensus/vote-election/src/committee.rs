@@ -42,7 +42,7 @@ use sp_consensus::{
 pub use sp_consensus_vote_election::{
 	digests::{CompatibleDigestItem, PreDigest},
 	// inherents::{InherentDataProvider, InherentType as AuraInherent, INHERENT_IDENTIFIER},
-	AuraApi as VoteApi, ConsensusLog, 
+	VoteElectionApi, ConsensusLog, 
 	make_transcript, make_transcript_data, VOTE_VRF_PREFIX,
 };
 
@@ -72,7 +72,7 @@ where
 	P::Public: AppPublic + Encode + Decode + Debug,
 	P::Signature: Encode + Decode,
 	// P::Public: AppPublic + Hash + Member + Encode + Decode,
-	C::Api: VoteApi<B, AuthorityId<P>>,
+	C::Api: VoteElectionApi<B, AuthorityId<P>>,
 	VL: VoteLink<B> + Send,
 {
     pub fn new(client: Arc<C>, keystore: SyncCryptoStorePtr, vote_link: VL)->Self{
@@ -150,7 +150,7 @@ where
 		for author in committee.iter(){
 			if SyncCryptoStore::has_keys(
 				&*self.keystore,
-				&[(author.to_raw_vec(), sp_application_crypto::key_types::AURA)],
+				&[(author.to_raw_vec(), sp_application_crypto::key_types::VOTE)],
 			){
 				return true;
 			}
@@ -224,7 +224,7 @@ where
 	fn do_propagate_election(&mut self, block_hash: B::Hash, election_ret: Vec<VoteData<B>>)->Result<(), String>{
 		let sr25519_public_keys = SyncCryptoStore::sr25519_public_keys(
 			&*self.keystore, 
-			sp_application_crypto::key_types::AURA
+			sp_application_crypto::key_types::VOTE
 		);
 
 		if sr25519_public_keys.len() == 0{
@@ -274,7 +274,7 @@ where
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Encode + Decode + Debug,
 	P::Signature: Encode + Decode,
-	C::Api: VoteApi<B, AuthorityId<P>>,
+	C::Api: VoteElectionApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	SO: SyncOracle<B> + Send,
 	VL: VoteLink<B> + Send,

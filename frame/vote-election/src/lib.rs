@@ -43,7 +43,7 @@ use frame_support::{
 	traits::{DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
 	BoundedSlice, ConsensusEngineId, Parameter, WeakBoundedVec,
 };
-use sp_consensus_vote_election::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID};
+use sp_consensus_vote_election::{AuthorityIndex, ConsensusLog, Slot, VOTE_ENGINE_ID};
 // use sp_consensus_vote_election::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID, digests::PreDigest};
 use sp_runtime::{
 	generic::DigestItem,
@@ -153,7 +153,7 @@ impl<T: Config> Pallet<T> {
 		<Authorities<T>>::put(&new);
 
 		let log = DigestItem::Consensus(
-			AURA_ENGINE_ID,
+			VOTE_ENGINE_ID,
 			ConsensusLog::AuthoritiesChange(new.into_inner()).encode(),
 		);
 		<frame_system::Pallet<T>>::deposit_log(log.into());
@@ -217,7 +217,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	fn on_disabled(i: usize) {
 	// fn on_disabled(i: u32) {
 		let log = DigestItem::Consensus(
-			AURA_ENGINE_ID,
+			VOTE_ENGINE_ID,
 			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),
 		);
 
@@ -231,7 +231,7 @@ impl<T: Config> FindAuthor<u32> for Pallet<T> {
 		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 	{
 		for (id, mut data) in digests.into_iter() {
-			if id == AURA_ENGINE_ID {
+			if id == VOTE_ENGINE_ID {
 				let slot = Slot::decode(&mut data).ok()?;
 				let author_index = *slot % Self::authorities().len() as u64;
 				return Some(author_index as u32)

@@ -19,7 +19,7 @@
 use sp_inherents::{Error, InherentData, InherentIdentifier};
 
 /// The Aura inherent identifier.
-pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
+pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"voteslot";
 
 /// The type of the Aura inherent.
 pub type InherentType = sp_consensus_slots::Slot;

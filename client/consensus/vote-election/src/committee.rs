@@ -1,6 +1,7 @@
 use crate::utils;
 use crate::{
-    AuthorityId, MAX_VOTE_RANK, ElectionWeightInfo, 
+    AuthorityId, ElectionWeightInfo, 
+    MAX_VOTE_RANK, COMMITTEE_TIMEOUT, COMMITTEE_S0_TIMEOUT,
     authorities, find_pre_digest,
 };
 
@@ -11,17 +12,15 @@ use std::{
     sync::Arc,
     fmt::Debug,
 	marker::PhantomData,
-    time::{Duration},
+    time::Duration,
     collections::{BTreeMap, HashMap},
 };
 
 use sc_client_api::{
 	BlockchainEvents, BlockOf, FinalityNotification,
-	// BlockchainEvents, ImportNotifications, BlockOf, FinalityNotification,
 };
 
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-// use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr, vrf::VRFSignature};
 
 use sp_core::crypto::{Pair, Public};
 use sp_api::ProvideRuntimeApi;
@@ -29,19 +28,15 @@ use sp_application_crypto::{AppKey, AppPublic};
 use sp_runtime::{
     generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, Zero},
-	// traits::{Block as BlockT, HashFor, Header as HeaderT, Zero},
 };
 
 use sp_consensus::{
-    // Error as ConsensusError,
-    SelectChain, SyncOracle, VELink as VoteLink,
-    // CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle, VELink as VoteLink,
+    SelectChain, SyncOracle, VELink ,
 	VoteElectionRequest, VoteData, ElectionData
 };
 
 pub use sp_consensus_vote_election::{
 	digests::{CompatibleDigestItem, PreDigest},
-	// inherents::{InherentDataProvider, InherentType as AuraInherent, INHERENT_IDENTIFIER},
 	VoteElectionApi, ConsensusLog, 
 	make_transcript, make_transcript_data, VOTE_VRF_PREFIX,
 };
@@ -50,8 +45,6 @@ use schnorrkel::{
     keys::PublicKey,
     vrf::{VRFOutput, VRFProof}
 };
-
-// type AuthorityId<P> = <P as Pair>::Public;
 
 pub struct CommitteeWorker<B, C, P, VL>
 where
@@ -71,9 +64,8 @@ where
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Encode + Decode + Debug,
 	P::Signature: Encode + Decode,
-	// P::Public: AppPublic + Hash + Member + Encode + Decode,
 	C::Api: VoteElectionApi<B, AuthorityId<P>>,
-	VL: VoteLink<B> + Send,
+	VL: VELink<B> + Send,
 {
     pub fn new(client: Arc<C>, keystore: SyncCryptoStorePtr, vote_link: VL)->Self{
         Self{
@@ -124,33 +116,28 @@ where
         let cur_hash = cur_header.hash();
         if let Some(bt_map) = self.root_vote_map.get(&cur_hash){
             for (_, (k, v)) in bt_map.iter().enumerate(){
-                // log::info!("{}:{:?}", i, v);
                 // log::info!("--Committee send back: ({:?}, {:?}) {}", v.sig_bytes[0..2], v.pub_bytes[0..2], cur_hash);
-                // log::info!("--Committee send: ({:?}), {}", v.pub_bytes, cur_hash);
                 log::info!("Committee.S1, pre send vrf: 0x{:0>32X}", k);
                 election_result.push(v.clone());
             }
 
-            // log::info!("--Committee: send back vote: {}", cur_hash);
             let _ = self.do_propagate_election(cur_hash, election_result);
         }
         else{
             log::warn!("Committee.S1: no vote for hash: #{}({})", cur_header.number(), cur_hash);
         }
-        // self.ve_link.ve_request(VoteElectionRequest::PropagateElection(election));
-        // log::info!("implment committee work propagate election");
     }
 
     fn is_committee_at(&self, hash: &B::Hash)->bool{
-		let committee = match authorities(self.client.as_ref(), &BlockId::Hash(hash.clone())){
+		let committee_vec = match authorities(self.client.as_ref(), &BlockId::Hash(hash.clone())){
 			Ok(x)=>x,
 			Err(_)=> return false
 		};
 
-		for author in committee.iter(){
+		for committee in committee_vec.iter(){
 			if SyncCryptoStore::has_keys(
 				&*self.keystore,
-				&[(author.to_raw_vec(), sp_application_crypto::key_types::VOTE)],
+				&[(committee.to_raw_vec(), sp_application_crypto::key_types::VOTE)],
 			){
 				return true;
 			}
@@ -247,7 +234,6 @@ where
 		).map_err(|e|format!{"Sign election msg failed: {:?}", e})?
         {
 			let pub_bytes = sr25519_public_keys[0].to_raw_vec();
-			// let election_data = <ElectionData<B>>::new(hash, sig_bytes, election_ret, pub_bytes);
 			let election_data = ElectionData::<B>{
 				block_hash,
 				sig_bytes,
@@ -269,7 +255,6 @@ pub async fn start_committee_worker<B, C, P, SC, SO, VL>(
 )
 where
     B: BlockT,
-	// C: BlockchainEvents<B> + BlockOf + Sync + Send + 'static, 
 	C: ProvideRuntimeApi<B> + BlockchainEvents<B> + BlockOf + Sync + Send + 'static, 
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Encode + Decode + Debug,
@@ -277,9 +262,8 @@ where
 	C::Api: VoteElectionApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	SO: SyncOracle<B> + Send,
-	VL: VoteLink<B> + Send,
+	VL: VELink<B> + Send,
 {
-    #[derive(Clone)]
     enum CommitteeState<H>{
         WaitStart,
         RecvVote(H),
@@ -313,7 +297,7 @@ where
         match state {
             CommitteeState::WaitStart=>{
 				log::info!("► CommitteeState::S0, wait start");
-                let mut delay = Delay::new(Duration::from_secs(8));
+                let mut delay = Delay::new(Duration::from_secs(COMMITTEE_S0_TIMEOUT));
                 let timeout = &mut delay;
 
                 loop{
@@ -333,12 +317,12 @@ where
                             }
                         },
                         _ = timeout.fuse()=>{
-                            log::info!("Committee.S0, timeout");
                             if !init_state{
                                 log::warn!("Committee.S0, timeout not from genesis");
                                 state = CommitteeState::WaitStart;
                                 continue 'outer;
                             }
+                            log::info!("Committee.S0, timeout");
 
                             init_state = false;
 
@@ -380,17 +364,12 @@ where
                     }
                 };
 
-                let mut delay = Delay::new(Duration::from_secs(8));
+                let mut delay = Delay::new(Duration::from_secs(COMMITTEE_TIMEOUT));
                 let timeout = &mut delay;
                 loop{
                     futures::select!{
-                        // None = imported_blocks_stream.next()=>{},
                         block = imported_blocks_stream.next()=>{
                             log::info!("Committee.S1, import block");
-                            // if let Some(block) = block{
-                            //     state = CommitteeState::RecvVote(block.header);
-                            //     continue 'outer;
-                            // }
 
                             if let Some(block) = block{
                                 if sync_oracle.is_major_syncing(){

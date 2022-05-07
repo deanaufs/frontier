@@ -1,26 +1,12 @@
 use crate::{Error, authorities, find_pre_digest};
 use codec::{Codec, Decode};
-use std::{
-	fmt::Debug,
-};
-use sp_api::{ProvideRuntimeApi};
+use std:: fmt::Debug;
+use sc_client_api::BlockOf;
 
-use sp_runtime::{
-	traits::{Block as BlockT, Header},
-};
-
-use sc_client_api::{
-	BlockOf,
-};
-
-use sp_runtime::{
-    generic::BlockId,
-};
-
-use sp_consensus::{
-	ElectionData,
-};
-
+use sp_api::ProvideRuntimeApi;
+use sp_runtime::{ traits::{Block as BlockT, Header}, };
+use sp_runtime::generic::BlockId;
+use sp_consensus::ElectionData;
 use sp_consensus_vote_election::VoteElectionApi;
 
 pub fn caculate_block_weight<A, B, S, C>(
@@ -114,7 +100,6 @@ fn do_caculate_weight_from_elections<B: BlockT>(
 	weight
 }
 
-// fn caculate_election_weight_value(rank_vec: &Vec<usize>, max_vote_rank: usize)->u64{
 fn caculate_weight_from_ranks(rank_vec: &Vec<usize>, max_vote_rank: usize)->u64{
 	let mut ret = 0;
 	let mut base = 1;

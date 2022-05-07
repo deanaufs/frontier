@@ -29,7 +29,7 @@ use sc_consensus::{
 };
 // use crate::slot_worker::{CheckedHeader, InherentDataProviderExt};
 use crate::worker::{CheckedHeader, InherentDataProviderExt};
-use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{
@@ -58,19 +58,6 @@ use schnorrkel::vrf::{VRFOutput, VRFProof};
 /// containing the seal.
 ///
 /// This digest item will always return `Some` when used with `as_aura_seal`.
-// fn check_header<C, B: BlockT, P: Pair>(
-// 	_client: &C,
-// 	_slot_now: Slot,
-// 	mut header: B::Header,
-// 	hash: B::Hash,
-// 	_authorities: &[AuthorityId<P>],
-// 	_check_for_equivocation: CheckForEquivocation,
-// ) -> Result<CheckedHeader<B::Header, (Slot, DigestItem)>, Error<B>>
-// where
-// 	P::Signature: Codec,
-// 	C: sc_client_api::backend::AuxStore,
-// 	P::Public: Encode + Decode + PartialEq + Clone,
-// {
 fn check_header<C, B: BlockT, P: Pair>(
 	mut header: B::Header,
 	block_hash: B::Hash,
@@ -96,16 +83,6 @@ where
 	
 	let vrf_proof = VRFProof::from_bytes(pre_digest.vrf_proof_bytes.as_slice())
 		.map_err(|_|Error::VRFProofDecodeFailed)?;
-
-	// let vrf_output = match VRFOutput::from_bytes(pre_digest.vrf_output_bytes.as_slice()){
-	// 	Ok(x)=>x,
-	// 	Err(_) => return Err(Error::VRFOutputDecodeFailed),
-	// };
-	// let vrf_proof = match VRFProof::from_bytes(pre_digest.vrf_proof_bytes.as_slice()){
-	// 	Ok(x)=>x,
-	// 	Err(_) => return Err(Error::VRFProofDecodeFailed),
-	// };
-	// let public_key_bytes = pre_digest.pub_key_bytes;
 
 	// verify block vrf
 	match schnorrkel::PublicKey::from_bytes(&pre_digest.pub_key_bytes)
@@ -177,7 +154,6 @@ pub struct AuraVerifier<C, P, CAW, CIDP> {
 	phantom: PhantomData<P>,
 	create_inherent_data_providers: CIDP,
 	can_author_with: CAW,
-	// check_for_equivocation: CheckForEquivocation,
 	telemetry: Option<TelemetryHandle>,
 }
 
@@ -186,14 +162,12 @@ impl<C, P, CAW, CIDP> AuraVerifier<C, P, CAW, CIDP> {
 		client: Arc<C>,
 		create_inherent_data_providers: CIDP,
 		can_author_with: CAW,
-		// check_for_equivocation: CheckForEquivocation,
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		Self {
 			client,
 			create_inherent_data_providers,
 			can_author_with,
-			// check_for_equivocation,
 			telemetry,
 			phantom: PhantomData,
 		}
@@ -280,11 +254,9 @@ where
 			.create_inherent_data()
 			.map_err(Error::<B>::Inherent)?;
 
-		// let slot_now = create_inherent_data_providers.slot();
-
-		// we add one to allow for some small drift.
-		// FIXME #1019 in the future, alter this queue to allow deferring of
-		// headers
+		// // we add one to allow for some small drift.
+		// // FIXME #1019 in the future, alter this queue to allow deferring of
+		// // headers
 		// let checked_header = check_header::<C, B, P>(
 		// 	&self.client,
 		// 	slot_now + 1,
@@ -293,6 +265,7 @@ where
 		// 	&authorities[..],
 		// 	self.check_for_equivocation,
 		// )
+
 		let checked_header = check_header::<C, B, P>(
 			block.header,
 			hash,
@@ -366,17 +339,6 @@ where
 
 				Ok((block, maybe_keys))
 			},
-			CheckedHeader::Deferred(a) => {
-				debug!(target: "aura", "Checking {:?} failed; {:?}.", hash, a);
-				telemetry!(
-					self.telemetry;
-					CONSENSUS_DEBUG;
-					"aura.header_too_far_in_future";
-					"hash" => ?hash,
-					"a" => ?a,
-				);
-				Err(format!("Header {:?} rejected: too far in the future", hash))
-			},
 		}
 	}
 }
@@ -391,13 +353,6 @@ pub enum CheckForEquivocation {
 	/// No, don't check for equivocation.
 	No,
 }
-
-// impl CheckForEquivocation {
-// 	/// Should we check for equivocation?
-// 	fn check_for_equivocation(self) -> bool {
-// 		matches!(self, Self::Yes)
-// 	}
-// }
 
 impl Default for CheckForEquivocation {
 	fn default() -> Self {
@@ -421,8 +376,6 @@ pub struct ImportQueueParams<'a, Block, I, C, S, CAW, CIDP> {
 	pub registry: Option<&'a Registry>,
 	/// Can we author with the current node?
 	pub can_author_with: CAW,
-	// /// Should we check for equivocation?
-	// pub check_for_equivocation: CheckForEquivocation,
 	/// Telemetry instance used to report telemetry metrics.
 	pub telemetry: Option<TelemetryHandle>,
 }
@@ -437,7 +390,6 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 		spawner,
 		registry,
 		can_author_with,
-		// check_for_equivocation,
 		telemetry,
 	}: ImportQueueParams<'a, Block, I, C, S, CAW, CIDP>,
 ) -> Result<DefaultImportQueue<Block, C>, sp_consensus::Error>
@@ -468,7 +420,6 @@ where
 		client,
 		create_inherent_data_providers,
 		can_author_with,
-		// check_for_equivocation,
 		telemetry,
 	});
 
@@ -483,8 +434,6 @@ pub struct BuildVerifierParams<C, CIDP, CAW> {
 	pub create_inherent_data_providers: CIDP,
 	/// Can we author with the current node?
 	pub can_author_with: CAW,
-	// /// Should we check for equivocation?
-	// pub check_for_equivocation: CheckForEquivocation,
 	/// Telemetry instance used to report telemetry metrics.
 	pub telemetry: Option<TelemetryHandle>,
 }
@@ -495,7 +444,6 @@ pub fn build_verifier<P, C, CIDP, CAW>(
 		client,
 		create_inherent_data_providers,
 		can_author_with,
-		// check_for_equivocation,
 		telemetry,
 	}: BuildVerifierParams<C, CIDP, CAW>,
 ) -> AuraVerifier<C, P, CAW, CIDP> {
@@ -503,7 +451,6 @@ pub fn build_verifier<P, C, CIDP, CAW>(
 		client,
 		create_inherent_data_providers,
 		can_author_with,
-		// check_for_equivocation,
 		telemetry,
 	)
 }

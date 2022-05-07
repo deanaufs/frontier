@@ -3,28 +3,18 @@ mod utils;
 mod committee;
 mod author;
 mod finalizer;
-// mod slot_worker;
-// mod slots;
 mod worker;
 
 use codec::{Codec, Decode, Encode};
 use futures::{prelude::*};
-// use futures_timer::Delay;
 use std::{
 	convert::{TryFrom},
     sync::Arc,
     fmt::Debug,
-	// marker::PhantomData,
-    // time::{SystemTime, Duration},
-    // collections::{BTreeMap, HashMap},
-	// pin::Pin,
 };
 
 use sc_client_api::{
 	BlockchainEvents, BlockOf,
-	// UsageProvider,
-	// backend::{AuxStore},
-	// BlockchainEvents, ImportNotifications, BlockOf, FinalityNotification,
 };
 
 use sp_keystore::{SyncCryptoStorePtr};
@@ -37,37 +27,23 @@ use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
     generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, Zero},
-	// traits::{Block as BlockT, HashFor, Header as HeaderT, Zero},
-	// DigestItem,
 };
 
 use sp_consensus::{
     Error as ConsensusError,
-    SelectChain, SyncOracle, VELink as VoteLink,
-    // CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle, VELink as VoteLink,
+    SelectChain, SyncOracle, VELink ,
 	Environment, Proposer, 
 };
 
 pub use sp_consensus_vote_election::{
 	digests::{CompatibleDigestItem, PreDigest},
 	Slot,
-	// inherents::{InherentDataProvider, InherentType as AuraInherent, INHERENT_IDENTIFIER},
 	VoteElectionApi, ConsensusLog, 
 	make_transcript, make_transcript_data, VOTE_VRF_PREFIX,
 };
-// use sp_consensus_slots::Slot;
 
 use sc_consensus::{BlockImport, };
 use sc_telemetry::{TelemetryHandle, };
-
-// use slots::Slots;
-// use slot_worker::{
-// 	// BackoffAuthoringBlocksStrategy, SlotInfo, StorageChanges,
-// 	BackoffAuthoringBlocksStrategy, InherentDataProviderExt,
-// 	// SimpleSlotWorker,
-// 	// ElectionWeightInfo,
-// };
-// pub use slot_worker::{SlotProportion, SlotResult};
 
 use worker::InherentDataProviderExt;
 pub use import_queue::{
@@ -77,34 +53,18 @@ pub use import_queue::{
 
 pub use finalizer::run_simple_finalizer;
 
-// use schnorrkel::{
-//     keys::PublicKey,
-//     vrf::{VRFOutput, VRFProof}
-// };
-// use log::{debug, warn, info};
-
 type AuthorityId<P> = <P as Pair>::Public;
 
-// pub type SlotDuration = slot_worker::SlotDuration<sp_consensus_vote_election::SlotDuration>;
-
 pub const MAX_VOTE_RANK: usize = 5;
+
 pub const COMMITTEE_TIMEOUT: u64 = 4;
+pub const COMMITTEE_S0_TIMEOUT: u64 = COMMITTEE_TIMEOUT + 2;
+
+pub const AUTHOR_S0_TIMEOUT: u64 = COMMITTEE_S0_TIMEOUT - 1;
+pub const AUTHOR_S1_TIMEOUT: u64 = COMMITTEE_TIMEOUT * 3;
+
 pub const PROPOSAL_TIMEOUT: u64 = COMMITTEE_TIMEOUT - 1;
 
-// /// Get type of `SlotDuration` for Aura.
-// pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
-// where
-// 	A: Codec,
-// 	B: BlockT,
-// 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
-// 	C::Api: VoteApi<B, A>,
-// {
-// 	// SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b).map_err(Into::into))
-// 	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
-// 	let slot_duration = client.runtime_api().slot_duration(&best_block_id)?;
-
-// 	Ok(SlotDuration::new(slot_duration))
-// }
 
 pub fn start_committee<P, B, C, SC, SO, VL>(
     client: Arc<C>,
@@ -122,7 +82,7 @@ where
 	C::Api: VoteElectionApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	SO: SyncOracle<B> + Send,
-	VL: VoteLink<B> + Send + Clone,
+	VL: VELink<B> + Send + Clone,
 {
     let worker = committee::CommitteeWorker::new(client.clone(), keystore, vote_link.clone());
 
@@ -141,12 +101,8 @@ pub fn start_author<P, B, C, I, CIDP, SO, SC, PF, VL, Error>(
 	proposal_factory: PF,
 	create_inherent_data_providers: CIDP,
 	sync_oracle: SO,
-	// justification_sync_link: L,
 	force_authoring: bool,
-	// backoff_authoring_blocks: Option<BS>,
     keystore: SyncCryptoStorePtr,
-	// block_proposal_slot_portion: SlotProportion,
-	// max_block_proposal_slot_portion: Option<SlotProportion>,
 	telemetry: Option<TelemetryHandle>,
 	select_chain: SC,
 	vote_link: VL,
@@ -157,39 +113,26 @@ where
 	P::Signature: TryFrom<Vec<u8>> + Encode + Decode,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockchainEvents<B> + HeaderBackend<B> + BlockOf + Sync + Send + 'static, 
-	// C: ProvideRuntimeApi<B> + BlockchainEvents<B> + BlockOf + Sync + Send + 'static, 
 	C::Api: VoteElectionApi<B, AuthorityId<P>>,
-	VL: VoteLink<B> + Send + Clone,
-	// BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
-	// E: Environment<B, Error = Error>,
-	// E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
+	VL: VELink<B> + Send + Clone,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	SO: SyncOracle<B> + Send + Sync + Clone,
 	SC: SelectChain<B>,
-	// L: sc_consensus::JustificationSyncLink<B>,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
-	// let slots =
-	// 	Slots::new(slot_duration.slot_duration(), create_inherent_data_providers, select_chain.clone());
-
 	let worker = author::AuthorWorker::<P, _, _, _, _, _, _, _>{
 		client: client.clone(),
 		block_import,
 		env: proposal_factory,
 		sync_oracle: sync_oracle.clone(),
-		// justification_sync_link,
 		force_authoring,
-		// backoff_authoring_blocks,
 		keystore,
-		// block_proposal_slot_portion,
-		// max_block_proposal_slot_portion,
 		telemetry,
 		create_inherent_data_providers,
-		// slots,
 		vote_link: vote_link.clone(),
 		state_info: None,
 	};
@@ -279,8 +222,6 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<PreDigest, Error<B>> {
 	if header.number().is_zero() {
 		return Ok(PreDigest{
-			// authority_index: 0u32,
-			// slot: 0.into(), 
 			pub_key_bytes: vec![],
 			vrf_output_bytes: vec![],
 			vrf_proof_bytes: vec![],
@@ -292,7 +233,6 @@ pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Resul
 	for log in header.digest().logs() {
 		log::trace!(target: "vote", "Checking log {:?}", log);
 		match (CompatibleDigestItem::<Signature>::as_ve_pre_digest(log), pre_digest.is_some()) {
-		// match (log.as_aura_pre_digest(), pre_digest.is_some()){
 			(Some(_), true) => return Err(vote_err(Error::MultipleHeaders)),
 			(None, _) => log::trace!(target: "vote", "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,

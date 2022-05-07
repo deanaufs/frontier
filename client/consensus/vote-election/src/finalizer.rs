@@ -16,7 +16,6 @@ use sp_runtime::{
 use sc_client_api::{
 	BlockchainEvents, BlockOf,
 	backend::{Backend as ClientBackend, Finalizer},
-	// BlockchainEvents, ImportNotifications, BlockOf, FinalityNotification,
 };
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
@@ -24,13 +23,11 @@ use sp_core::crypto::Pair;
 pub use sp_consensus_vote_election::{
 	digests::{CompatibleDigestItem, PreDigest},
 	Slot,
-	// inherents::{InherentDataProvider, InherentType as AuraInherent, INHERENT_IDENTIFIER},
 	VoteElectionApi, ConsensusLog, 
 	make_transcript, make_transcript_data, VOTE_VRF_PREFIX,
 };
 
 use crate::MAX_VOTE_RANK;
-// use crate::authorities;
 use crate::utils;
 
 pub async fn run_simple_finalizer<A, B, C, CB, P>(client: Arc<C>)
@@ -48,14 +45,14 @@ where
 
     loop{
         if let Some(block)= imported_blocks_stream.next().await{
+
+            // avoid re-finalize block #0
 			if block.header.number().is_one() {
-				// avoid re-finalize block #0
 				continue;
 			}
 
             if let Ok(can_finalize) = utils::caculate_block_weight::<A, B, P::Signature, C>(&block.header, client.as_ref(), MAX_VOTE_RANK){
 
-                // if weight <= min_election_weight{
                 if can_finalize{
 
                     pre_finalize_vec.push(block.header.clone());
@@ -66,11 +63,9 @@ where
                         match client.finalize_block(BlockId::Hash(finalize_header.hash()), None, true){
                             Ok(()) => {
                                 log::info!("✅ Successfully finalized block: #{} ({})", finalize_header.number(), finalize_header.hash());
-                                // rpc::send_result(&mut sender, Ok(()))
                             },
                             Err(e) => {
                                 log::warn!("Failed to finalize block #{} ({}) {:?}", finalize_header.number(), finalize_header.hash(), e);
-                                // rpc::send_result(&mut sender, Err(e.into()))
                             },
                         }
                     }

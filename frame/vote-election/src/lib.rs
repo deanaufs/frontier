@@ -40,14 +40,13 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	traits::{DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
+	traits::{DisabledValidators, FindAuthor, Get, /*OnTimestampSet, */OneSessionHandler},
 	BoundedSlice, ConsensusEngineId, Parameter, WeakBoundedVec,
 };
 use sp_consensus_vote_election::{AuthorityIndex, ConsensusLog, Slot, VOTE_ENGINE_ID};
-// use sp_consensus_vote_election::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID, digests::PreDigest};
 use sp_runtime::{
 	generic::DigestItem,
-	traits::{IsMember, Member, Saturating},
+	traits::{IsMember, Member, /*Saturating*/},
 	RuntimeAppPublic,
 };
 use sp_std::prelude::*;
@@ -62,7 +61,6 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: pallet_timestamp::Config + frame_system::Config {
@@ -86,47 +84,11 @@ pub mod pallet {
 	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(sp_std::marker::PhantomData<T>);
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_: T::BlockNumber) -> Weight {
-			if let Some(new_slot) = Self::current_slot_from_digests() {
-				// let current_slot = CurrentSlot::<T>::get();
-
-				// assert!(current_slot < new_slot, "Slot must increase");
-				CurrentSlot::<T>::put(new_slot);
-
-				if let Some(n_authorities) = <Authorities<T>>::decode_len() {
-					let authority_index = *new_slot % n_authorities as u64;
-					if T::DisabledValidators::is_disabled(authority_index as u32) {
-						panic!(
-							"Validator with index {:?} is disabled and should not be attempting to author blocks.",
-							authority_index,
-						);
-					}
-				}
-
-				// TODO [#3398] Generate offence report for all authorities that skipped their
-				// slots.
-
-				T::DbWeight::get().reads_writes(2, 1)
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
-	}
-
 	/// The current authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
 	pub(super) type Authorities<T: Config> =
 		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
-
-	/// The current slot of this block.
-	///
-	/// This will be set in `on_initialize`.
-	#[pallet::storage]
-	#[pallet::getter(fn current_slot)]
-	pub(super) type CurrentSlot<T: Config> = StorageValue<_, Slot, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -166,11 +128,6 @@ impl<T: Config> Pallet<T> {
 				.expect("Initial authority set must be less than T::MaxAuthorities");
 			<Authorities<T>>::put(bounded);
 		}
-	}
-
-	/// Get the current slot from the pre-runtime digests.
-	fn current_slot_from_digests() -> Option<Slot> {
-		None
 	}
 }
 
@@ -260,20 +217,5 @@ pub type AuraAuthorId<T> = FindAccountFromAuthorIndex<T, Pallet<T>>;
 impl<T: Config> IsMember<T::AuthorityId> for Pallet<T> {
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
 		Self::authorities().iter().any(|id| id == authority_id)
-	}
-}
-
-impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
-	fn on_timestamp_set(_moment: T::Moment) {
-		// let slot_duration = Self::slot_duration();
-		// assert!(!slot_duration.is_zero(), "Aura slot duration cannot be zero.");
-
-		// let timestamp_slot = moment / slot_duration;
-		// let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
-
-		// assert!(
-		// 	CurrentSlot::<T>::get() == timestamp_slot,
-		// 	"Timestamp slot must match `CurrentSlot`"
-		// );
 	}
 }

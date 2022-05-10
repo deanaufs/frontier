@@ -263,10 +263,6 @@ impl<B: BlockT> SyncOracle<B> for NoNetwork {
 	// fn ve_request(&mut self, _: VoteElectionRequest<B>){}
 }
 
-impl<B: BlockT> VELink<B> for NoNetwork {
-	fn ve_request(&mut self, _: VoteElectionRequest<B>){}
-}
-
 impl<B: BlockT, T> SyncOracle<B> for Arc<T>
 where
 	T: ?Sized,
@@ -283,6 +279,10 @@ where
 	// fn ve_request(&mut self, request: VoteElectionRequest<B>){
 	// 	<&T>::ve_request(&mut &**self, request)
 	// }
+}
+
+impl<B: BlockT> VELink<B> for NoNetwork {
+	fn ve_request(&mut self, _: VoteElectionRequest<B>){}
 }
 
 impl<B:BlockT, T> VELink<B> for Arc<T>

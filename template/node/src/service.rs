@@ -218,12 +218,6 @@ pub fn new_partial(
 			create_inherent_data_providers: move |_, ()| async move {
 				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-				// let slot =
-				// 	sp_consensus_vote_election::inherents::InherentDataProvider::from_timestamp_and_duration(
-				// 		*timestamp,
-				// 		slot_duration,
-				// 	);
-
 				let dynamic_fee =
 					pallet_dynamic_fee::InherentDataProvider(U256::from(target_gas_price));
 
@@ -254,101 +248,6 @@ pub fn new_partial(
 			fee_history_cache,
 		),
 	})
-
-	// #[cfg(feature = "manual-seal")]
-	// {
-	// 	let sealing = cli.run.sealing;
-
-	// 	let frontier_block_import =
-	// 		FrontierBlockImport::new(client.clone(), client.clone(), frontier_backend.clone());
-
-	// 	let import_queue = sc_consensus_manual_seal::import_queue(
-	// 		Box::new(frontier_block_import.clone()),
-	// 		&task_manager.spawn_essential_handle(),
-	// 		config.prometheus_registry(),
-	// 	);
-
-	// 	Ok(sc_service::PartialComponents {
-	// 		client,
-	// 		backend,
-	// 		task_manager,
-	// 		import_queue,
-	// 		keystore_container,
-	// 		select_chain,
-	// 		transaction_pool,
-	// 		other: (
-	// 			(frontier_block_import, sealing),
-	// 			filter_pool,
-	// 			frontier_backend,
-	// 			telemetry,
-	// 			fee_history_cache,
-	// 		),
-	// 	})
-	// }
-
-	// #[cfg(feature = "aura")]
-	// {
-	// 	let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
-	// 		client.clone(),
-	// 		&(client.clone() as Arc<_>),
-	// 		select_chain.clone(),
-	// 		telemetry.as_ref().map(|x| x.handle()),
-	// 	)?;
-
-	// 	let frontier_block_import = FrontierBlockImport::new(
-	// 		grandpa_block_import.clone(),
-	// 		client.clone(),
-	// 		frontier_backend.clone(),
-	// 	);
-
-	// 	let slot_duration = sc_consensus_aura::slot_duration(&*client)?.slot_duration();
-	// 	let target_gas_price = cli.run.target_gas_price;
-
-	// 	let import_queue =
-	// 		sc_consensus_aura::import_queue::<AuraPair, _, _, _, _, _, _>(ImportQueueParams {
-	// 			block_import: frontier_block_import.clone(),
-	// 			justification_import: Some(Box::new(grandpa_block_import.clone())),
-	// 			client: client.clone(),
-	// 			create_inherent_data_providers: move |_, ()| async move {
-	// 				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
-
-	// 				let slot =
-	// 					sp_consensus_aura::inherents::InherentDataProvider::from_timestamp_and_duration(
-	// 						*timestamp,
-	// 						slot_duration,
-	// 					);
-
-	// 				let dynamic_fee =
-	// 					pallet_dynamic_fee::InherentDataProvider(U256::from(target_gas_price));
-
-	// 				Ok((timestamp, slot, dynamic_fee))
-	// 			},
-	// 			spawner: &task_manager.spawn_essential_handle(),
-	// 			can_author_with: sp_consensus::CanAuthorWithNativeVersion::new(
-	// 				client.executor().clone(),
-	// 			),
-	// 			registry: config.prometheus_registry(),
-	// 			check_for_equivocation: Default::default(),
-	// 			telemetry: telemetry.as_ref().map(|x| x.handle()),
-	// 		})?;
-
-	// 	Ok(sc_service::PartialComponents {
-	// 		client,
-	// 		backend,
-	// 		task_manager,
-	// 		import_queue,
-	// 		keystore_container,
-	// 		select_chain,
-	// 		transaction_pool,
-	// 		other: (
-	// 			(frontier_block_import, grandpa_link),
-	// 			filter_pool,
-	// 			frontier_backend,
-	// 			telemetry,
-	// 			fee_history_cache,
-	// 		),
-	// 	})
-	// }
 }
 
 fn remote_keystore(_url: &String) -> Result<Arc<LocalKeystore>, &'static str> {

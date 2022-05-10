@@ -1280,7 +1280,6 @@ impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle<B> for NetworkSer
 	fn is_offline(&mut self) -> bool {
 		self.num_connected.load(Ordering::Relaxed) == 0
 	}
-
 }
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::VELink<B> for NetworkService<B, H> {
@@ -1297,7 +1296,6 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle<B> for &'a Ne
 	fn is_offline(&mut self) -> bool {
 		self.num_connected.load(Ordering::Relaxed) == 0
 	}
-
 }
 
 impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::VELink<B> for &'a NetworkService<B, H> {

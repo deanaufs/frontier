@@ -33,7 +33,9 @@ use sp_consensus::{
     Error as ConsensusError,
     SelectChain, SyncOracle, VELink ,
 	Environment, Proposer, 
+	ElectionData,
 };
+use schnorrkel::{vrf::VRFOutput, keys::PublicKey};
 
 pub use sp_consensus_vote_election::{
 	digests::{CompatibleDigestItem, PreDigest},
@@ -160,7 +162,7 @@ where
 		.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet.into())
 }
 
-struct ElectionWeightInfo{
+pub struct ElectionWeightInfo{
 	pub weight: u64,
 	pub vrf_num: u128,
     pub exceed_half: bool,
@@ -239,4 +241,65 @@ pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Resul
 		}
 	}
 	pre_digest.ok_or_else(|| vote_err(Error::NoDigestFound))
+}
+
+pub trait ElectionInfoByHeader<B, P, C>
+where
+	B: BlockT,
+	P: Pair,
+	P::Public: Decode + Codec + Debug,
+	P::Signature: Codec,
+	C: ProvideRuntimeApi<B> + BlockOf + Sync + Send + 'static, 
+	C::Api: VoteElectionApi<B, AuthorityId<P>>,
+{
+	/// Get client reference
+	fn client(&self)->&C;
+
+    /// Returns the election data
+    fn caculate_election_info_from_header(&self, header: &B::Header)->Result<ElectionWeightInfo, String>{
+        if header.number().is_zero(){
+            return Ok(ElectionWeightInfo{
+                weight: u64::MAX,
+                vrf_num: u128::MAX,
+                exceed_half: true,
+            });
+        }
+
+		let committee_list = authorities(self.client(), &BlockId::Hash(header.hash()))
+			.map_err(|e|format!("Get committee from pallet failed: {}", e))?;
+
+		let pre_digest = find_pre_digest::<B, P::Signature>(&header)
+			.map_err(|e|format!("find_pre_digest failed: {}", e))?;
+
+		let vrf_output = VRFOutput::from_bytes(pre_digest.vrf_output_bytes.as_slice())
+			.map_err(|e|format!("Decode vrf output failed: {}", e))?;
+
+		let transcript = make_transcript(&header.parent_hash().encode());
+
+		let public = PublicKey::from_bytes(pre_digest.pub_key_bytes.as_slice())
+			.map_err(|e|format!("Decode public key failed: {}", e))?;
+
+		let vrf_num = match vrf_output.attach_input_hash(&public, transcript){
+			Ok(inout)=>u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(VOTE_VRF_PREFIX)),
+			Err(e)=> Err(format!("gen vrf number failed: {}", e))?,
+		};
+
+		let pub_bytes = pre_digest.pub_key_bytes;
+
+		let election_bytes = pre_digest.election_bytes;
+		let election_vec = <Vec<ElectionData<B>>>::decode(&mut election_bytes.as_slice())
+			.map_err(|e|format!("Decode election data failed: {}", e))?;
+
+		let committee_count = committee_list.len();
+
+		let cur_election_weight = utils::caculate_weight_from_elections(&pub_bytes, &election_vec, committee_count, MAX_VOTE_RANK);
+        let min_election_weight = utils::caculate_min_election_weight(committee_count, MAX_VOTE_RANK);
+        let exceed_half = cur_election_weight <= min_election_weight;
+
+		Ok(ElectionWeightInfo{
+			weight: cur_election_weight,
+			vrf_num,
+            exceed_half,
+		})
+    }
 }

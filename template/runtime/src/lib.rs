@@ -240,6 +240,10 @@ impl pallet_timestamp::Config for Runtime {
 	type MinimumPeriod = MinimumPeriod;
 	type WeightInfo = ();
 	type OnTimestampSet = ();
+	// #[cfg(feature = "aura")]
+	// type OnTimestampSet = Aura;
+	// #[cfg(feature = "manual-seal")]
+	// type OnTimestampSet = ();
 }
 
 parameter_types! {

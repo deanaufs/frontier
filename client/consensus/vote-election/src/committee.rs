@@ -3,6 +3,7 @@ use crate::{
     AuthorityId, ElectionWeightInfo, 
     MAX_VOTE_RANK, COMMITTEE_TIMEOUT, COMMITTEE_S0_TIMEOUT,
     authorities, find_pre_digest,
+    ElectionInfoByHeader,
 };
 
 use codec::{Decode, Encode};
@@ -77,10 +78,12 @@ where
         }
     }
 
+    /// Clear vote_map
     fn on_finalize_block(&mut self, block: Option<FinalityNotification<B>>){
 		block.map(|block|self.root_vote_map.remove(&block.hash));
     }
 
+    /// Retains the vote
     fn on_recv_vote(&mut self, vote_data: &VoteData<B>)->Result<(), String>{
         // log::info!("Recv vote at : {}", vote_data.block_hash);
         let vrf_num = self.verify_vote(&vote_data)?;
@@ -107,6 +110,7 @@ where
         Ok(())
     }
 
+    /// Propagate the election to the network
     fn propagate_election(&mut self, cur_header: &B::Header){
         if !self.is_committee_at(&cur_header.hash()){
             return
@@ -128,6 +132,7 @@ where
         }
     }
 
+    /// Check if the worker is committee at this block
     fn is_committee_at(&self, hash: &B::Hash)->bool{
 		let committee_vec = match authorities(self.client.as_ref(), &BlockId::Hash(hash.clone())){
 			Ok(x)=>x,
@@ -145,6 +150,7 @@ where
 		return false;
     }
 
+    /// Check if the vote from author is valid
     fn verify_vote(&self, vote_data: &VoteData<B>)->Result<u128, String>{
 		let transcript = make_transcript(&vote_data.block_hash.encode());
 		let vrf_output = VRFOutput::from_bytes(vote_data.vrf_output_bytes.as_slice())
@@ -161,53 +167,7 @@ where
 			}).map_err(|e|format!("Caculate vrf num failed: {}", e))
     }
 
-    fn caculate_election_info_from_header(&self, header: &B::Header)->Result<ElectionWeightInfo, String>{
-        if header.number().is_zero(){
-            return Ok(ElectionWeightInfo{
-                weight: u64::MAX,
-                vrf_num: u128::MAX,
-                exceed_half: true,
-            });
-        }
-
-		let committee_list = authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
-			.map_err(|e|format!("Get committee from pallet failed: {}", e))?;
-
-		let pre_digest = find_pre_digest::<B, P::Signature>(&header)
-			.map_err(|e|format!("find_pre_digest failed: {}", e))?;
-
-		let vrf_output = VRFOutput::from_bytes(pre_digest.vrf_output_bytes.as_slice())
-			.map_err(|e|format!("Decode vrf output failed: {}", e))?;
-
-		let transcript = make_transcript(&header.parent_hash().encode());
-
-		let public = PublicKey::from_bytes(pre_digest.pub_key_bytes.as_slice())
-			.map_err(|e|format!("Decode public key failed: {}", e))?;
-
-		let vrf_num = match vrf_output.attach_input_hash(&public, transcript){
-			Ok(inout)=>u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(VOTE_VRF_PREFIX)),
-			Err(e)=> Err(format!("gen vrf number failed: {}", e))?,
-		};
-
-		let pub_bytes = pre_digest.pub_key_bytes;
-
-		let election_bytes = pre_digest.election_bytes;
-		let election_vec = <Vec<ElectionData<B>>>::decode(&mut election_bytes.as_slice())
-			.map_err(|e|format!("Decode election data failed: {}", e))?;
-
-		let committee_count = committee_list.len();
-
-		let cur_election_weight = utils::caculate_weight_from_elections(&pub_bytes, &election_vec, committee_count, MAX_VOTE_RANK);
-        let min_election_weight = utils::caculate_min_election_weight(committee_count, MAX_VOTE_RANK);
-        let exceed_half = cur_election_weight <= min_election_weight;
-
-		Ok(ElectionWeightInfo{
-			weight: cur_election_weight,
-			vrf_num,
-            exceed_half,
-		})
-    }
-
+    /// Do the propagate election routine
 	fn do_propagate_election(&mut self, block_hash: B::Hash, election_ret: Vec<VoteData<B>>)->Result<(), String>{
 		let sr25519_public_keys = SyncCryptoStore::sr25519_public_keys(
 			&*self.keystore, 
@@ -244,6 +204,21 @@ where
 		}
         Ok(())
 	}
+}
+
+impl<B, C, P, VL> ElectionInfoByHeader<B, P, C> for CommitteeWorker<B, C, P, VL>
+where
+    B: BlockT,
+    C: ProvideRuntimeApi<B> + BlockOf + Send + Sync + 'static,
+	P: Pair + Send + Sync,
+	P::Public: AppPublic + Encode + Decode + Debug,
+	P::Signature: Encode + Decode,
+	C::Api: VoteElectionApi<B, AuthorityId<P>>,
+	VL: VELink<B> + Send,
+{
+    fn client(&self) ->&C {
+        self.client.as_ref()
+    }
 }
 
 pub async fn start_committee_worker<B, C, P, SC, SO, VL>(

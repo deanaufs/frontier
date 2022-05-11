@@ -1,9 +1,6 @@
-use crate::utils;
 use crate::{
-    AuthorityId, ElectionWeightInfo, 
+    AuthorityId, authorities, ElectionInfoByHeader,
     MAX_VOTE_RANK, COMMITTEE_TIMEOUT, COMMITTEE_S0_TIMEOUT,
-    authorities, find_pre_digest,
-    ElectionInfoByHeader,
 };
 
 use codec::{Decode, Encode};
@@ -43,7 +40,6 @@ pub use sp_consensus_vote_election::{
 };
 
 use schnorrkel::{
-    keys::PublicKey,
     vrf::{VRFOutput, VRFProof}
 };
 

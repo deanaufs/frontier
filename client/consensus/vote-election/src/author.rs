@@ -11,12 +11,9 @@ use futures::{channel::mpsc, prelude::*};
 use futures_timer::Delay;
 use std::{
 	convert::{TryFrom, TryInto},
-    sync::Arc,
-    fmt::Debug,
     time::{SystemTime, Duration},
-	pin::Pin,
+    sync::Arc, fmt::Debug, pin::Pin,
 };
-// use schnorrkel::vrf::{VRFOutput};
 use schnorrkel::keys::PublicKey;
 
 use sc_client_api::{
@@ -28,7 +25,7 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr, vrf::VRFSignature};
 use sp_core::crypto::{Pair, Public};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::{AppKey, AppPublic};
-use sp_blockchain::{HeaderBackend};
+use sp_blockchain::HeaderBackend;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
     generic::BlockId,
@@ -44,8 +41,7 @@ use sp_consensus::{
 
 pub use sp_consensus_vote_election::{
 	digests::{CompatibleDigestItem, PreDigest},
-	Slot,
-	VoteElectionApi, ConsensusLog, 
+	Slot, VoteElectionApi, ConsensusLog, 
 	make_transcript, make_transcript_data, VOTE_VRF_PREFIX,
 };
 
@@ -87,7 +83,6 @@ where
 	pub vote_link: VL,
 	pub state_info: Option<StateInfo<B, P>>,
 }
-
 
 impl<P, B, C, E, I, SO, VL, CIDP, Error> AuthorWorker<P, B, C, E, I, SO, VL, CIDP> 
 where
@@ -326,67 +321,62 @@ where
 		vec![<DigestItem<B::Hash> as CompatibleDigestItem<P::Signature>>::ve_pre_digest(claim.0.clone())]
 	}
 
-	/// Returns the authorities
-	fn get_authorities(
+	/// Returns the committee 
+	fn get_committee(
 		&self,
 		header: &B::Header,
 	) -> Result<Vec<AuthorityId<P>>, sp_consensus::Error> {
 		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
 	}
 
-	/// Returns a function which produces a `BlockImportParams`.
+	/// Returns a `BlockImportParams`.
 	fn block_import_params(
 		&self,
-	) -> Box<
-		dyn Fn(
-				B::Header,
-				&B::Hash,
-				Vec<B::Extrinsic>,
-				StorageChanges<sp_api::TransactionFor<C, B>, B>,
-				(PreDigest, P::Public),
-				Vec<AuthorityId<P>>,
-			) -> Result<
-				sc_consensus::BlockImportParams<B, sp_api::TransactionFor<C, B>>,
-				sp_consensus::Error,
-			> + Send
-			+ 'static,
-	> {
+		header: B::Header,
+		header_hash: &B::Hash,
+		body: Vec<B::Extrinsic>,
+		storage_changes: StorageChanges<sp_api::TransactionFor<C, B>, B>,
+		public: P::Public,
+	)->Result<
+		sc_consensus::BlockImportParams<B, sp_api::TransactionFor<C,B>>,
+		sp_consensus::Error,
+	>  
+	{
 		let keystore = self.keystore.clone();
-		Box::new(move |header, header_hash, body, storage_changes, (_, public), _epoch| {
-			// sign the pre-sealed hash of the block and then
-			// add it to a digest item.
-			let public_type_pair = public.to_public_crypto_pair();
-			let public = public.to_raw_vec();
-			let signature = SyncCryptoStore::sign_with(
-				&*keystore,
-				<AuthorityId<P> as AppKey>::ID,
-				&public_type_pair,
-				header_hash.as_ref(),
+
+		// sign the pre-sealed hash of the block and then
+		// add it to a digest item.
+		let public_type_pair = public.to_public_crypto_pair();
+		let public = public.to_raw_vec();
+		let signature = SyncCryptoStore::sign_with(
+			&*keystore,
+			<AuthorityId<P> as AppKey>::ID,
+			&public_type_pair,
+			header_hash.as_ref(),
+		)
+		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+		.ok_or_else(|| {
+			sp_consensus::Error::CannotSign(
+				public.clone(),
+				"Could not find key in keystore.".into(),
 			)
-			.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-			.ok_or_else(|| {
-				sp_consensus::Error::CannotSign(
-					public.clone(),
-					"Could not find key in keystore.".into(),
-				)
-			})?;
-			let signature = signature
-				.clone()
-				.try_into()
-				.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
+		})?;
+		let signature = signature
+			.clone()
+			.try_into()
+			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
 
-			let signature_digest_item =
-				<DigestItem<B::Hash> as CompatibleDigestItem<P::Signature>>::ve_seal(signature);
+		let signature_digest_item =
+			<DigestItem<B::Hash> as CompatibleDigestItem<P::Signature>>::ve_seal(signature);
 
-			let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
-			import_block.post_digests.push(signature_digest_item);
-			import_block.body = Some(body);
-			import_block.state_action =
-				StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
-			import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
+		import_block.post_digests.push(signature_digest_item);
+		import_block.body = Some(body);
+		import_block.state_action =
+			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
+		import_block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-			Ok(import_block)
-		})
+		Ok(import_block)
 	}
 
 	/// Returns a `Proposer` to author on top of the given block.
@@ -402,137 +392,136 @@ where
 
 	/// Build block
 	async fn proposal_block(&mut self, vrf_sig: VRFSignature)->Result<(), String>{
-		let state_info = self.state_info.clone().ok_or(format!("no state info"))?;
+		let state_info = self.state_info.clone().ok_or(format!("No state info"))?;
 
-		if state_info.cur_weight < state_info.max_weight{
-			log::info!(
-				target: "ve-consensus",
-				"Author.S1: timeout, prepare block at: #{} ({})",
-				state_info.cur_header.number(),
-				state_info.cur_header.hash(),
-			);
-
-			// build block
-			let proposing_remaining_duration = Duration::from_millis(PROPOSAL_TIMEOUT);
-
-			let parent_header = state_info.cur_header.clone();
-
-			let authorities = match self.get_authorities(&parent_header) {
-				Ok(epoch_data) => epoch_data,
-				Err(err) => {
-					log::warn!(
-						target: "ve-consensus",
-						"Unable to fetch epoch data at block {:?}: {:?}",
-						parent_header.hash(),
-						// slot_info.chain_head.hash(),
-						err,
-					);
-
-					return Err(format!("Unable to get epoch data: {:?}", err))?;
-				},
-			};
-
-			let authorities_len = authorities.len();
-
-			if !self.force_authoring &&
-				self.sync_oracle.is_offline() &&
-				(authorities_len > 1)
-			{
-				log::debug!(target: "ve-consensus", "Skipping proposal. Waiting for the network.");
-				return Err("skip proposal")?;
-			}
-
-			let claim = self.claim(&vrf_sig, state_info.election_vec).ok_or("Get claim failed")?;
-			let logs = self.pre_digest_data(&claim);
-
-			let proposer = match self.proposer(&parent_header).await {
-				Ok(p) => p,
-				Err(err) => {
-					log::warn!(
-						target: "ve-consensus",
-						"Unable to author block prev: {}: {:?}", parent_header.hash(), err,
-					);
-
-					return Err(format!("Unable to author block prev: {}", err))?;
-				},
-			};
-
-			// deadline our production to 98% of the total time left for proposing. As we deadline
-			// the proposing below to the same total time left, the 2% margin should be enough for
-			// the result to be returned.
-			let inherent_data_providers = self
-				.create_inherent_data_providers
-				.create_inherent_data_providers(state_info.cur_header.hash(), ())
-				.await
-				.map_err(|e|format!("Create inherent provider failed: {}", e))?;
-
-			let inherent_data = inherent_data_providers
-				.create_inherent_data()
-				.map_err(|e|format!("crate inherent data failed: {}", e))?;
-
-			let proposing = proposer
-				.propose(
-					inherent_data,
-					sp_runtime::generic::Digest { logs },
-					proposing_remaining_duration.mul_f32(0.98),
-					None,
-				)
-				.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
-
-			let proposal = match proposing.await{
-				Ok(p) => p,
-				Err(err) => {
-					log::warn!(target: "ve-consensus", "Proposing failed: {:?}", err);
-					return Err(format!("proposing failed: {}", err))?;
-				}
-			};
-
-			let (block, _storage_proof) = (proposal.block, proposal.proof);
-			let (header, body) = block.deconstruct();
-			let header_num = *header.number();
-			let header_hash = header.hash();
-
-			let block_import_params_maker = self.block_import_params();
-			let block_import_params = match block_import_params_maker(
-				header,
-				&header_hash,
-				body.clone(),
-				proposal.storage_changes,
-				claim,
-				authorities,
-			) {
-				Ok(bi) => bi,
-				Err(err) => {
-					log::warn!(
-						target: "ve-consensus",
-						"Failed to create block import params: {:?}",
-						err
-					);
-					return Err(format!("failed to create block import params: {:?}", err))?;
-				},
-			};
-
-			log::info!(
-				target: "ve-consensus",
-				"🔖 Pre-sealed block at {}. Hash now {}, previously {}.",
-				header_num,
-				block_import_params.post_hash(),
-				header_hash,
-			);
-
-			self.block_import
-				.import_block(block_import_params, Default::default())
-				.await
-				.map_err(|e|format!("Import block failed: {}", e))?;
-		}
-		else{
+		if state_info.cur_weight >= state_info.max_weight{
 			log::info!(
 				target: "ve-consensus",
 				"Author.S1: timeout, no weight prepare block at: #{} ({})",
 				state_info.cur_header.number(),
 				state_info.cur_header.hash(),
 			);
+			return Ok(())
 		}
+
+		// Only proposal in case cur_weight < max_weight
+		log::info!(
+			target: "ve-consensus",
+			"Author.S1: timeout, prepare block at: #{} ({})",
+			state_info.cur_header.number(),
+			state_info.cur_header.hash(),
+		);
+
+		// build block
+		let proposing_remaining_duration = Duration::from_millis(PROPOSAL_TIMEOUT);
+
+		let parent_header = state_info.cur_header.clone();
+
+		let committee = match self.get_committee(&parent_header) {
+			Ok(v) => v,
+			Err(err) => {
+				log::warn!(
+					target: "ve-consensus",
+					"Unable to fetch epoch data at block {:?}: {:?}",
+					parent_header.hash(),
+					err,
+				);
+
+				return Err(format!("Unable to get epoch data: {:?}", err))?;
+			},
+		};
+
+		let committee_len = committee.len();
+
+		if !self.force_authoring &&
+			self.sync_oracle.is_offline() &&
+			(committee_len > 1)
+		{
+			log::debug!(target: "ve-consensus", "Skipping proposal. Waiting for the network.");
+			return Err("skip proposal")?;
+		}
+
+		let claim = self.claim(&vrf_sig, state_info.election_vec).ok_or("Get claim failed")?;
+		let logs = self.pre_digest_data(&claim);
+
+		let proposer = match self.proposer(&parent_header).await {
+			Ok(p) => p,
+			Err(err) => {
+				log::warn!(
+					target: "ve-consensus",
+					"Unable to author block prev: {}: {:?}", parent_header.hash(), err,
+				);
+
+				return Err(format!("Unable to author block prev: {}", err))?;
+			},
+		};
+
+		// deadline our production to 98% of the total time left for proposing. As we deadline
+		// the proposing below to the same total time left, the 2% margin should be enough for
+		// the result to be returned.
+		let inherent_data_providers = self
+			.create_inherent_data_providers
+			.create_inherent_data_providers(state_info.cur_header.hash(), ())
+			.await
+			.map_err(|e|format!("Create inherent provider failed: {}", e))?;
+
+		let inherent_data = inherent_data_providers
+			.create_inherent_data()
+			.map_err(|e|format!("crate inherent data failed: {}", e))?;
+
+		let proposing = proposer
+			.propose(
+				inherent_data,
+				sp_runtime::generic::Digest { logs },
+				proposing_remaining_duration.mul_f32(0.98),
+				None,
+			)
+			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)));
+
+		let proposal = match proposing.await{
+			Ok(p) => p,
+			Err(err) => {
+				log::warn!(target: "ve-consensus", "Proposing failed: {:?}", err);
+				return Err(format!("proposing failed: {}", err))?;
+			}
+		};
+
+		let (block, _storage_proof) = (proposal.block, proposal.proof);
+		let (header, body) = block.deconstruct();
+		let header_num = *header.number();
+		let header_hash = header.hash();
+
+		let block_import_params = match self.block_import_params(
+			header,
+			&header_hash,
+			body.clone(),
+			proposal.storage_changes,
+			claim.1,
+		){
+			Ok(bi) => bi,
+			Err(err) => {
+				log::warn!(
+					target: "ve-consensus",
+					"Failed to create block import params: {:?}",
+					err
+				);
+				return Err(format!("failed to create block import params: {:?}", err))?;
+			},
+		};
+
+		log::info!(
+			target: "ve-consensus",
+			"🔖 Pre-sealed block at {}. Hash now {}, previously {}.",
+			header_num,
+			block_import_params.post_hash(),
+			header_hash,
+		);
+
+		self.block_import
+			.import_block(block_import_params, Default::default())
+			.await
+			.map_err(|e|format!("Import block failed: {}", e))?;
+
 		Ok(())
 	}
 }

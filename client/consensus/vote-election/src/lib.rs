@@ -19,9 +19,9 @@ use sc_client_api::{
 
 use sp_keystore::{SyncCryptoStorePtr};
 
-use sp_core::crypto::{Pair, };
+use sp_core::crypto::Pair;
 use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::{AppPublic,};
+use sp_application_crypto::AppPublic;
 use sp_blockchain::{HeaderBackend, /*Result as CResult*/};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
@@ -44,8 +44,8 @@ pub use sp_consensus_vote_election::{
 	make_transcript, make_transcript_data, VOTE_VRF_PREFIX,
 };
 
-use sc_consensus::{BlockImport, };
-use sc_telemetry::{TelemetryHandle, };
+use sc_consensus::BlockImport;
+use sc_telemetry::TelemetryHandle;
 
 use worker::InherentDataProviderExt;
 pub use import_queue::{
@@ -66,7 +66,6 @@ pub const AUTHOR_S0_TIMEOUT: u64 = COMMITTEE_S0_TIMEOUT - 1;
 pub const AUTHOR_S1_TIMEOUT: u64 = COMMITTEE_TIMEOUT * 3;
 
 pub const PROPOSAL_TIMEOUT: u64 = COMMITTEE_TIMEOUT - 1;
-
 
 pub fn start_committee<P, B, C, SC, SO, VL>(
     client: Arc<C>,
